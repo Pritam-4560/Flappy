@@ -1,6 +1,6 @@
 # Flapocalypse (working title)
 
-Flappy Bird roguelite. FLAP → SURVIVE → COLLECT → CHOOSE UPGRADES → DIE → UPGRADE → RUN IT BACK.
+The Big Climb: one huge vertical map (5,000 m). Flap up through ledges, stomp drones, grab launchers, beat 3 guardians. Permanent upgrades let you climb higher each run until you can reach the summit in one run.
 
 Play: open `index.html` (no build step). Space / click / tap to flap. Progress saves in `localStorage`.
 
