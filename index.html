@@ -34,17 +34,43 @@ const GUARDS = [
   { alt: 1200, name: 'The Great Pigeon', hits: 5, reward: 100, pat: [[0], [4], [2], [1, 3], [0, 2], [2, 4], [1, 3]] },
   { alt: 3000, name: 'Storm Engine',     hits: 7, reward: 200, pat: [[1, 3], [0, 2, 4], [2], [0, 1], [3, 4], [0, 4], [1, 2, 3]] },
 ];
-const zoneOf = m => { const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
+const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
-// ---------- Save ----------
-const SAVE_KEY = 'flapocalypse.v3';
-let save = { scrap: 0, best: 0, runs: 0, summits: 0, tier: { hull: 0, wing: 0, salv: 0 }, beaten: {}, cannon: {}, startAlt: 0, daily: null };
-try {
-  const s = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
-  Object.assign(save, s); save.tier = Object.assign({ hull: 0, wing: 0, salv: 0 }, s.tier);
-  save.beaten = s.beaten || {}; save.cannon = s.cannon || {};
-} catch (e) {}
-const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} };
+// ---------- Versions: every update changes how the game looks ----------
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1 }];
+const VERS = [
+  { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Sunny sky, green pipes, yellow bird.',
+    notes: ['Tap to flap through the pipes', 'Your score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
+  { v: '1.1', name: 'The Junkyard', sum: 'A junkyard world and a reason to come back.', visual: 'Tin-can bird, riveted girder pipes, dark junk sky.',
+    notes: ['Rivet, a tin-can sparrow, replaces the yellow bird', 'Girder pipes with hazard-stripe caps', 'Collect scrap, bank it when you die', 'Workshop: permanent upgrades after every run', 'Distance in metres and a YOUR BEST line'] },
+  { v: '1.2', name: 'Drones & Launchers', sum: 'New things to hit, grab and ride.', visual: 'Propeller drones, orange launchers, ? bubbles, pink Fever glow.',
+    notes: ['Stomp junk drones by landing on them', 'Launchers rocket you past the pipes', 'Card bubbles: pick 1 of 3 upgrades per run', 'Fever: near-misses charge a pink x2 scrap mode'] },
+  { v: '1.3', name: 'Five Zones', sum: 'The map changes as you fly further.', visual: 'Sky and weather shift: smog, rust, rain and stars.',
+    notes: ['Smog Works, Rust Pipes, Storm Spire, The Summit', 'Moving pipes, spinning gears, wind and lightning', 'Every zone has its own sky and weather', 'Pipes get tighter and faster deeper in'] },
+  { v: '1.4', name: 'Guardians', sum: 'A finish line, and bosses guarding it.', visual: 'Red beam lanes, boss machines, a map progress bar.',
+    notes: ['Three guardian boss fights on a 3,000 m map', 'Fly into the blue cores to damage them', 'Finish the map in one run to win', 'Shortcut Cannons and a progress bar on top'] },
+  { v: '1.5', name: 'Pixel Rivet', sum: 'The polish update.', visual: 'Hand-animated pixel-art Rivet, flap by flap.',
+    notes: ['Pixel-art Rivet with an 8-frame flap animation', 'Synth music that speeds up in Fever', 'Mute button for sound and music'] },
+].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
+const LATEST = VERS.length;
+let ver = LATEST;
+try { const sv = +localStorage.getItem('fl.ver'); if (sv >= 1 && sv <= LATEST) ver = sv; } catch (e) {}
+const FX = () => VERS[ver - 1].f;
+
+// ---------- Save (each version keeps its own progress; the latest keeps the original key) ----------
+const saveKey = () => 'flapocalypse.v3' + (ver === LATEST ? '' : '.ver' + ver);
+let save;
+function loadSave() {
+  save = { scrap: 0, best: 0, runs: 0, summits: 0, tier: { hull: 0, wing: 0, salv: 0 }, beaten: {}, cannon: {}, startAlt: 0, daily: null };
+  try {
+    const s = JSON.parse(localStorage.getItem(saveKey()) || '{}');
+    Object.assign(save, s); save.tier = Object.assign({ hull: 0, wing: 0, salv: 0 }, s.tier);
+    save.beaten = s.beaten || {}; save.cannon = s.cannon || {};
+  } catch (e) {}
+}
+loadSave();
+const persist = () => { try { localStorage.setItem(saveKey(), JSON.stringify(save)); } catch (e) {} };
+function selectVer(v) { ver = v; try { localStorage.setItem('fl.ver', String(v)); } catch (e) {} loadSave(); dailyMode = false; newRun(); }
 
 // ---------- Workshop (permanent upgrades) ----------
 const TIER_COST = [60, 300, 1000, 2500];
@@ -79,11 +105,11 @@ const dayNumber = () => Math.floor(Date.parse(todayStr()) / 864e5) - 20000;
 const hashStr = t => { let h = 2166136261; for (const ch of t) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
 
 // ---------- State ----------
-let state = 'menu';             // menu | play | pick | dead | victory
+let state = 'title';            // title | updates | menu | play | pick | dead | victory
 let run, buttons = [], cards = [], parts = [], floaters = [];
 let last = 0, shake = 0, deadAt = 0, copied = 0, zoneToast = { t: 0, txt: '' }, flash = { c: '#fff', a: 0 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const tl = id => (dailyMode && state !== 'menu' && state !== 'dead' && state !== 'victory') ? 0 : (save.tier[id] || 0);
+const tl = id => (!FX().workshop || dailyMode && state !== 'menu' && state !== 'dead' && state !== 'victory') ? 0 : (save.tier[id] || 0);
 const cl = id => (run && run.cards[id]) || 0;
 
 // ---------- Audio (synthesised, no files) ----------
@@ -145,7 +171,7 @@ const mOf = () => run.dist / PPM;
 
 // ---------- Run setup ----------
 function newRun() {
-  const sa = (!dailyMode && save.startAlt) || 0;
+  const sa = (!dailyMode && FX().workshop && save.startAlt) || 0;
   run = {
     t: 0, started: false, bird: { y: H / 2, vy: 0 }, dist: sa * PPM,
     pipes: [], scraps: [], drones: [], gears: [], pads: [], bubbles: [], bolts: [],
@@ -153,7 +179,7 @@ function newRun() {
     cards: {}, shields: (tl('hull') >= 1 ? 1 : 0) + (tl('hull') >= 2 ? 1 : 0),
     invuln: 0, boostT: 0, fever: 0, feverT: 0, wind: 0, windT: 0, boltT: 3,
     scrap: 0, exact: 0, payout: 0, maxM: sa, passed: 0, startAlt: sa,
-    gi: GUARDS.findIndex(g => g.alt > sa), fight: null, nextBubble: (Math.floor(sa / 500) + 1) * 500,
+    gi: FX().guardians ? GUARDS.findIndex(g => g.alt > sa) : -1, fight: null, nextBubble: (Math.floor(sa / 500) + 1) * 500,
     phoenix: false, killer: '', victory: false, zone: zoneOf(sa), lastFlap: -9,
   };
   genPipes();
@@ -180,16 +206,16 @@ function addPipe() {
   run.lastGy = gy; run.lastSp = sp;
   const p = { x: run.genX, w: 58, gy, base, amp: z >= 1 ? grng(0, z >= 3 ? 70 : 50) : 0, ph: grng(0, 6.28), spd: grng(0.9, 1.7), z, passed: false, minEdge: 99, cy: gy, gap: base };
   run.pipes.push(p);
-  if (m >= run.nextBubble) {
+  if (FX().cards && m >= run.nextBubble) {
     const g0 = run.gi >= 0 && run.gi < GUARDS.length ? GUARDS[run.gi].alt : 1e9;
     if (run.nextBubble < g0 - 40) run.bubbles.push({ x: run.genX + p.w / 2, p, got: false });
     run.nextBubble += 500;
   }
   const midX = run.genX + sp * 0.5, roll = seedRand();
-  if (roll < 0.34) run.drones.push({ x: midX, y0: grng(130, H - 130), amp: grng(20, 70), ph: grng(0, 6.28), spd: grng(1.2, 2.2), dead: false, y: H / 2 });
+  if (roll < 0.34) { if (FX().drones) run.drones.push({ x: midX, y0: grng(130, H - 130), amp: grng(20, 70), ph: grng(0, 6.28), spd: grng(1.2, 2.2), dead: false, y: H / 2 }); }
   else if (roll < 0.56 && z >= 2) run.gears.push({ x: midX, y0: grng(170, H - 170), amp: grng(60, 130), ph: grng(0, 6.28), spd: grng(1.4, 2.4), a: 0, y: H / 2 });
-  else if (roll < 0.62) run.pads.push({ x: midX, y: grng(150, H - 150), got: false });
-  if (seedRand() < 0.8) run.scraps.push({ x: midX + grng(-40, 40), y: grng(110, H - 110), r: 8, v: seedRand() < 0.1 ? 5 : 1 });
+  else if (roll < 0.62) { if (FX().pads) run.pads.push({ x: midX, y: grng(150, H - 150), got: false }); }
+  if (seedRand() < 0.8 && FX().scrap) run.scraps.push({ x: midX + grng(-40, 40), y: grng(110, H - 110), r: 8, v: seedRand() < 0.1 ? 5 : 1 });
   run.genX += sp;
 }
 
@@ -202,12 +228,13 @@ function flap() {
 }
 function float(txt, x, y, c = '#fff') { floaters.push({ txt, x, y, c, l: 1 }); }
 function addScrap(base, x, y) {
+  if (!FX().scrap) return;
   run.exact += base * scrapMul();
   const n = Math.floor(run.exact) - run.scrap;
   run.scrap += n; if (n > 0) float('+' + n, x, y, '#ffd24a');
 }
 function addFever(n) {
-  if (run.feverT > 0 || run.fight) return;
+  if (!FX().fever || run.feverT > 0 || run.fight) return;
   run.fever = Math.min(100, run.fever + n * Math.pow(1.4, cl('engine')));
   if (run.fever >= 100) { run.feverT = feverLen(); run.fever = 100; shake = 10; float('FEVER!', BX + 40, run.bird.y - 40, '#ff4fd8'); SFX.fever(); flash = { c: '#ff4fd8', a: .35 }; }
 }
@@ -231,13 +258,14 @@ function die(why) {
 function finish(victory) {
   state = victory ? 'victory' : 'dead'; run.victory = victory; shake = 14; deadAt = performance.now();
   if (victory) SFX.win(); else SFX.die(); flash = { c: victory ? '#ffd24a' : '#fff', a: .6 };
-  run.payout = Math.floor(run.maxM / 10) * payRate() + (victory ? 500 : 0);
+  run.score = FX().junk ? run.maxM : run.passed;
+  run.payout = FX().scrap ? Math.floor(run.maxM / 10) * payRate() + (victory ? 500 : 0) : 0;
   save.scrap += run.scrap + run.payout; save.runs++;
-  run.newBest = Math.floor(run.maxM) > save.best; if (run.newBest) save.best = Math.floor(run.maxM);
+  run.newBest = Math.floor(run.score) > save.best; if (run.newBest) save.best = Math.floor(run.score);
   if (victory) save.summits++;
   if (dailyMode) {
     if (!save.daily || save.daily.date !== todayStr()) save.daily = { date: todayStr(), best: 0 };
-    run.dailyNew = Math.floor(run.maxM) > save.daily.best; if (run.dailyNew) save.daily.best = Math.floor(run.maxM);
+    run.dailyNew = Math.floor(run.score) > save.daily.best; if (run.dailyNew) save.daily.best = Math.floor(run.score);
   }
   persist();
   for (let i = 0; i < 30; i++) parts.push({ x: BX, y: run.bird.y, vx: rng(-200, 200), vy: rng(-250, 150), l: rng(.4, 1), c: ['#ffd24a', '#ff6a3d', '#fff'][i % 3] });
@@ -314,7 +342,7 @@ function update(dt) {
   if (state !== 'play') return;
 
   const b = run.bird, F = run.fight, r = hitR();
-  run.t += dt; music(dt);
+  run.t += dt; if (FX().music) music(dt);
   if (run.invuln > 0) run.invuln -= dt;
   if (run.feverT > 0) { run.feverT -= dt; if (run.feverT <= 0) { run.fever = 0; float('fever over', BX + 30, b.y - 30, '#aaa'); } }
 
@@ -327,7 +355,8 @@ function update(dt) {
     const np = run.pipes.find(p => p.x + p.w > run.dist + BX); const target = np ? np.cy : H / 2;
     b.y += (target - b.y) * Math.min(1, 5 * dt); b.vy = 0;
   } else { b.vy = Math.min(maxFall(), b.vy + (gravity() + run.wind * 260) * dt); b.y += b.vy * dt; }
-  if (b.y > H - 18) { b.y = H - 18; b.vy = -380; hurt('the floor'); if (state !== 'play') return; }
+  const flY = FX().junk ? H - 18 : H - 66;
+  if (b.y > flY) { b.y = flY; b.vy = -380; hurt('the floor'); if (state !== 'play') return; }
   if (b.y < 14) { b.y = 14; b.vy = Math.max(b.vy, 0); }
 
   if (F) { updateFight(dt); return; }
@@ -439,7 +468,8 @@ function drawRivetSprite(x, y, rot, frame, fever, shield, alpha) {
   ctx.restore();
 }
 function rivetFrame(since, t) { return since < 0.33 ? Math.min(7, Math.floor(since * 24)) : [3, 4, 5][Math.floor(t * 5) % 3]; }
-function drawBird() {
+function drawBird() { if (!FX().junk) { const b = run.bird, since = run.t - run.lastFlap; drawClassicBirdAt(BX, b.y, clamp(b.vy / 600, -.45, 1.1), since < 0.25 ? Math.sin(since * 40) : 0); return; } drawJunkBird(); }
+function drawJunkBird() {
   const b = run.bird, since = run.t - run.lastFlap;
   const wing = since < 0.22 ? Math.sin(since * 32) * 1.1 : -0.25 + Math.sin(run.t * 4) * 0.1;
   if (run.boostT > 0) {
@@ -450,7 +480,7 @@ function drawBird() {
   }
   const blink = run.invuln > 0 && ((run.t * 20) | 0) % 2;
   const rot = clamp(b.vy / 700, -.5, .9);
-  if (rivetOk) drawRivetSprite(BX, b.y, rot, rivetFrame(since, run.t), run.feverT > 0, run.shields > 0, blink ? .4 : 1);
+  if (rivetOk && FX().sprite) drawRivetSprite(BX, b.y, rot, rivetFrame(since, run.t), run.feverT > 0, run.shields > 0, blink ? .4 : 1);
   else drawRivet(BX, b.y, rot, wing, run.feverT > 0, run.shields > 0, blink ? .4 : 1);
 }
 function drawDrone(d, x) {
@@ -486,6 +516,7 @@ function drawBackdrop(z) {
   if (z === 4) { ctx.fillStyle = 'rgba(255,230,160,.5)'; for (let i = 0; i < 50; i++) ctx.fillRect((((i * 89 - d * 0.1) % W) + W) % W, (i * 53) % H, 2, 2); }
 }
 function drawWorld() {
+  if (!FX().junk) { drawClassicWorld(); return; }
   const m = state === 'menu' ? 0 : mOf(), z = zoneOf(m), Z = ZONES[z];
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, run && run.feverT > 0 ? '#3d0f4a' : Z.sky[0]); g.addColorStop(1, Z.sky[1]);
@@ -499,7 +530,7 @@ function drawWorld() {
     const bx = save.best * PPM - d;
     if (bx > -20 && bx < W + 20) { ctx.strokeStyle = 'rgba(255,210,74,.75)'; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.moveTo(bx, 0); ctx.lineTo(bx, H); ctx.stroke(); ctx.setLineDash([]); text(`YOUR BEST ${fmt(save.best)} m`, bx + 6, 110, 11, '#ffd24a', 'left'); }
   }
-  for (const gd of GUARDS) {
+  for (const gd of (FX().guardians ? GUARDS : [])) {
     const gx = gd.alt * PPM - d; if (gx > -30 && gx < W + 30 && !(run.fight && run.fight.gi === GUARDS.indexOf(gd))) { ctx.fillStyle = 'rgba(255,106,61,.25)'; ctx.fillRect(gx - 3, 0, 6, H); text(gd.name.toUpperCase() + ' ' + gd.alt + ' m', gx + 8, 130, 11, '#ff9a6d', 'left'); }
   }
   for (const p of run.pipes) {
@@ -533,21 +564,25 @@ function muteBtn(x, y) {
   text(muted ? '🔇' : '🔊', x, y, 16);
 }
 function drawHUD() {
-  const px0 = 14, pw = W - 28, py = 10;
-  ctx.fillStyle = 'rgba(255,255,255,.14)'; rr(px0, py, pw, 6, 3); ctx.fill();
-  ctx.fillStyle = '#ffd24a'; rr(px0, py, Math.max(6, pw * clamp(run.maxM / SUMMIT, 0, 1)), 6, 3); ctx.fill();
-  for (const gd of GUARDS) { ctx.fillStyle = '#ff6a3d'; ctx.fillRect(px0 + pw * gd.alt / SUMMIT - 1, py - 3, 3, 12); }
-  if (save.best) { ctx.fillStyle = '#fff'; ctx.fillRect(px0 + pw * clamp(save.best / SUMMIT, 0, 1) - 1, py - 2, 2, 10); }
+  if (FX().guardians) {
+    const px0 = 14, pw = W - 28, py = 10;
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; rr(px0, py, pw, 6, 3); ctx.fill();
+    ctx.fillStyle = '#ffd24a'; rr(px0, py, Math.max(6, pw * clamp(run.maxM / SUMMIT, 0, 1)), 6, 3); ctx.fill();
+    for (const gd of GUARDS) { ctx.fillStyle = '#ff6a3d'; ctx.fillRect(px0 + pw * gd.alt / SUMMIT - 1, py - 3, 3, 12); }
+    if (save.best) { ctx.fillStyle = '#fff'; ctx.fillRect(px0 + pw * clamp(save.best / SUMMIT, 0, 1) - 1, py - 2, 2, 10); }
+  }
   text(fmt(run.maxM) + ' m', 14, 38, 26, '#fff', 'left');
-  text('⚙ ' + run.scrap, W - 14, 38, 16, '#ffd24a', 'right');
+  if (FX().scrap) text('⚙ ' + run.scrap, W - 14, 38, 16, '#ffd24a', 'right');
   text('best ' + fmt(save.best) + ' m', W - 14, 58, 12, '#9aa6c8', 'right');
   if (run.shields) text('🛡 ' + run.shields, 14, 64, 15, '#6fe3ff', 'left');
   muteBtn(W / 2, 38);
-  const mw = 150, mx = W / 2 - mw / 2;
-  ctx.fillStyle = 'rgba(0,0,0,.5)'; rr(mx, H - 26, mw, 12, 6); ctx.fill();
-  const ff = run.feverT > 0 ? run.feverT / feverLen() : run.fever / 100;
-  ctx.fillStyle = run.feverT > 0 ? '#ff4fd8' : '#a06bff'; rr(mx, H - 26, Math.max(0, mw * ff), 12, 6); ctx.fill();
-  text(run.feverT > 0 ? 'FEVER: WIDE GAPS, x2 SCRAP' : 'FEVER', W / 2, H - 38, 11, '#d9c9ff');
+  if (FX().fever) {
+    const mw = 150, mx = W / 2 - mw / 2;
+    ctx.fillStyle = 'rgba(0,0,0,.5)'; rr(mx, H - 26, mw, 12, 6); ctx.fill();
+    const ff = run.feverT > 0 ? run.feverT / feverLen() : run.fever / 100;
+    ctx.fillStyle = run.feverT > 0 ? '#ff4fd8' : '#a06bff'; rr(mx, H - 26, Math.max(0, mw * ff), 12, 6); ctx.fill();
+    text(run.feverT > 0 ? 'FEVER: WIDE GAPS, x2 SCRAP' : 'FEVER', W / 2, H - 38, 11, '#d9c9ff');
+  }
   if (run.wind) text(run.wind > 0 ? 'WIND DOWN' : 'WIND UP', W / 2, 90, 13, '#9ad0ff');
   if (zoneToast.t > 0) { ctx.globalAlpha = Math.min(1, zoneToast.t); text(zoneToast.txt.toUpperCase(), W / 2, 170, 22, '#fff'); ctx.globalAlpha = 1; }
   if (!run.started) {
@@ -578,9 +613,9 @@ function nextGoal() {
   return best;
 }
 function shareText() {
-  const head = dailyMode ? `FLAPOCALYPSE Daily #${dayNumber()}` : 'FLAPOCALYPSE';
-  const tail = run.victory ? '\nREACHED THE END OF THE MAP!' : `\n${fmt(SUMMIT - run.maxM)} m from the finish.`;
-  return `${head}\n🐦 ${fmt(run.maxM)} m of ${fmt(SUMMIT)} m\n💀 ${run.victory ? 'Beat all 3 guardians' : 'Ended by ' + run.killer}${tail}\nCan you fly further?`;
+  const head = (dailyMode ? `FLAPOCALYPSE Daily #${dayNumber()}` : 'FLAPOCALYPSE') + ` v${VERS[ver - 1].v}`;
+  const tail = !FX().guardians ? '' : (run.victory ? '\nREACHED THE END OF THE MAP!' : `\n${fmt(SUMMIT - run.maxM)} m from the finish.`);
+  return `${head}\n🐦 ${fmt(run.maxM)} m${FX().guardians ? ' of ' + fmt(SUMMIT) + ' m' : ''}\n💀 ${run.victory ? 'Beat all 3 guardians' : 'Ended by ' + run.killer}${tail}\nCan you fly further?`;
 }
 function shareRun() {
   const done = () => { copied = performance.now(); };
@@ -588,16 +623,18 @@ function shareRun() {
 }
 function drawEnd() {
   ctx.fillStyle = 'rgba(5,8,16,.8)'; ctx.fillRect(0, 0, W, H);
-  const v = run.victory;
+  const v = run.victory, G = FX().guardians;
   text(v ? 'YOU MADE IT!' : 'RUN OVER', W / 2, 72, 34, v ? '#ffd24a' : '#ff6a3d');
   text(`${dailyMode ? 'Daily #' + dayNumber() + ' · ' : ''}${v ? 'you beat all 3 guardians' : 'ended by ' + run.killer}`, W / 2, 104, 13, '#b8c4ea', 'center', false);
   text(`${fmt(run.maxM)} m`, W / 2, 148, 42, '#fff');
   text(run.newBest ? 'NEW BEST!' : `best ${fmt(save.best)} m`, W / 2, 182, 14, run.newBest ? '#6fe3ff' : '#9aa6c8');
-  ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(40, 204, W - 80, 12, 6); ctx.fill();
-  ctx.fillStyle = '#ffd24a'; rr(40, 204, Math.max(8, (W - 80) * clamp(run.maxM / SUMMIT, 0, 1)), 12, 6); ctx.fill();
-  for (const gd of GUARDS) { ctx.fillStyle = '#ff6a3d'; ctx.fillRect(40 + (W - 80) * gd.alt / SUMMIT - 1, 200, 3, 20); }
-  const ng = GUARDS.find(gd => gd.alt > run.maxM);
-  text(v ? 'The whole map, in one run.' : (ng ? `${fmt(ng.alt - run.maxM)} m to ${ng.name}` : ''), W / 2, 234, 13, '#ffb199', 'center', false);
+  if (G) {
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(40, 204, W - 80, 12, 6); ctx.fill();
+    ctx.fillStyle = '#ffd24a'; rr(40, 204, Math.max(8, (W - 80) * clamp(run.maxM / SUMMIT, 0, 1)), 12, 6); ctx.fill();
+    for (const gd of GUARDS) { ctx.fillStyle = '#ff6a3d'; ctx.fillRect(40 + (W - 80) * gd.alt / SUMMIT - 1, 200, 3, 20); }
+    const ng = GUARDS.find(gd => gd.alt > run.maxM);
+    text(v ? 'The whole map, in one run.' : (ng ? `${fmt(ng.alt - run.maxM)} m to ${ng.name}` : ''), W / 2, 234, 13, '#ffb199', 'center', false);
+  }
   text(`Scrap: +${run.scrap + run.payout}  (${run.scrap} collected + ${run.payout} distance bonus)`, W / 2, 268, 14, '#ffd24a');
   text(`Total scrap: ${fmt(save.scrap)}`, W / 2, 290, 13, '#ffd24a', 'center', false);
   const goal = nextGoal();
@@ -612,17 +649,17 @@ function drawEnd() {
   btn('WORKSHOP', 60, 464, 130, 44, () => { if (ok()) { state = 'menu'; dailyMode = false; } }, { size: 16 });
   const just = performance.now() - copied < 1800;
   btn(just ? 'COPIED!' : 'SHARE', 210, 464, 130, 44, () => { if (ok()) shareRun(); }, { size: 16, color: '#2f9e5e' });
-  if (just) text('result copied - paste it anywhere', W / 2, 530, 12, '#6fe3ff', 'center', false);
+  btn('TITLE', 60, 520, W - 120, 36, () => { if (ok()) { state = 'title'; dailyMode = false; } }, { size: 14, color: '#2a3350' });
+  if (just) text('result copied - paste it anywhere', W / 2, 574, 12, '#6fe3ff', 'center', false);
 }
 
 // ---------- Menu / Workshop ----------
 function drawMenu() {
   const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#16213d'); g.addColorStop(1, '#0d1424'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   text('FLAPOCALYPSE', W / 2, 34, 30, '#ffd24a');
-  if (rivetOk) drawRivetSprite(44, 34, -0.1, Math.floor(performance.now() / 110) % 8, false, false, 1);
-  else drawRivet(44, 34, -0.15, Math.sin(performance.now() / 120) * 0.8, false, false, 1);
+  btn('‹', 12, 20, 34, 30, () => { state = 'title'; }, { size: 22, color: '#2a3350' });
   muteBtn(W - 26, 34);
-  text(`⚙ ${fmt(save.scrap)}   ·   best ${fmt(save.best)} m of ${fmt(SUMMIT)}   ·   finishes ${save.summits}`, W / 2, 64, 13, '#b8c4ea', 'center', false);
+  text(`⚙ ${fmt(save.scrap)}   ·   best ${fmt(save.best)} m${FX().guardians ? ' of ' + fmt(SUMMIT) + '   ·   finishes ' + save.summits : ''}`, W / 2, 64, 13, '#b8c4ea', 'center', false);
   const rowH = 92;
   BRANCHES.forEach((b, i) => {
     const y = 84 + i * (rowH + 8), t = save.tier[b.id], maxed = t >= 4, cost = TIER_COST[t], can = !maxed && save.scrap >= cost;
@@ -636,8 +673,8 @@ function drawMenu() {
   const cy = 84 + 3 * (rowH + 8);
   rr(20, cy, W - 40, 78, 10); ctx.fillStyle = '#1b2442'; ctx.fill();
   text('Shortcut Cannon', 32, cy + 18, 15, '#fff', 'left');
-  text(`start the map further along (start: ${save.startAlt} m)`, 32, cy + 38, 11, '#9aa6c8', 'left', false);
-  CANNONS.forEach((c, i) => {
+  text(FX().guardians ? `start the map further along (start: ${save.startAlt} m)` : 'Unlocks with Guardians (update 1.4)', 32, cy + 38, 11, '#9aa6c8', 'left', false);
+  (FX().guardians ? CANNONS : []).forEach((c, i) => {
     const bx = 32 + i * 176, owned = save.cannon[c.g], unlocked = save.beaten[c.g], sel = save.startAlt === c.alt;
     const label = owned ? (sel ? `${c.alt} m  ON` : `${c.alt} m`) : (unlocked ? `${c.alt} m  ⚙${fmt(c.cost)}` : `${c.alt} m  locked`);
     btn(label, bx, cy + 46, 164, 26, () => {
@@ -650,20 +687,184 @@ function drawMenu() {
   text(`Daily #${dayNumber()}: same map for everyone, no upgrades${save.daily && save.daily.date === todayStr() ? ' · best ' + fmt(save.daily.best) + ' m' : ''}`, W / 2, H - 10, 11, '#9aa6c8', 'center', false);
 }
 
+// ---------- Classic (v1.0) look ----------
+function classicScene(d, sh) {
+  ctx.fillStyle = '#70c5ce'; ctx.fillRect(0, 0, W, sh);
+  ctx.fillStyle = 'rgba(255,255,255,.88)';
+  for (let i = 0; i < 4; i++) { const cx = (((i * 170 - d * 0.08) % 640) + 640) % 640 - 120, cy = 70 + (i % 2) * 46; ctx.beginPath(); ctx.arc(cx, cy, 22, 0, 7); ctx.arc(cx + 26, cy - 5, 28, 0, 7); ctx.arc(cx + 54, cy + 2, 20, 0, 7); ctx.fill(); }
+  ctx.fillStyle = '#8fd14f';
+  for (let i = 0; i < 8; i++) { const cx = (((i * 90 - d * 0.25) % 720) + 720) % 720 - 80; ctx.beginPath(); ctx.arc(cx, sh - 66, 36 + (i % 3) * 8, Math.PI, 0); ctx.fill(); }
+}
+function classicGround(d, y) {
+  ctx.fillStyle = '#ded895'; ctx.fillRect(0, y, W, H);
+  ctx.fillStyle = '#73bf2e'; ctx.fillRect(0, y, W, 14);
+  ctx.fillStyle = '#9ce659';
+  for (let x = -(d % 28) - 28; x < W; x += 28) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 14, y); ctx.lineTo(x + 7, y + 14); ctx.lineTo(x - 7, y + 14); ctx.fill(); }
+  ctx.fillStyle = '#543847'; ctx.fillRect(0, y, W, 3); ctx.fillRect(0, y + 14, W, 3);
+}
+function classicPipe(x, y0, y1, w, capBottom) {
+  const h = y1 - y0; if (h <= 0) return;
+  ctx.fillStyle = '#73bf2e'; ctx.fillRect(x, y0, w, h);
+  ctx.fillStyle = '#9ce659'; ctx.fillRect(x + 4, y0, 8, h);
+  ctx.fillStyle = '#558022'; ctx.fillRect(x + w - 10, y0, 10, h);
+  ctx.strokeStyle = '#543847'; ctx.lineWidth = 3; ctx.strokeRect(x, y0, w, h);
+  const ch = Math.min(26, h), cy = capBottom ? y1 - ch : y0;
+  ctx.fillStyle = '#73bf2e'; ctx.fillRect(x - 4, cy, w + 8, ch);
+  ctx.fillStyle = '#9ce659'; ctx.fillRect(x, cy, 8, ch);
+  ctx.fillStyle = '#558022'; ctx.fillRect(x + w - 8, cy, 12, ch);
+  ctx.strokeRect(x - 4, cy, w + 8, ch);
+}
+function drawClassicBirdAt(x, y, rot, wing) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.lineWidth = 2.5; ctx.strokeStyle = '#543847';
+  ctx.fillStyle = '#f8d838'; ctx.beginPath(); ctx.ellipse(0, 0, 17, 13, 0, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.translate(-6, 3); ctx.rotate(wing * 0.7); ctx.fillStyle = '#fcf4c0'; ctx.beginPath(); ctx.ellipse(0, 0, 9, 6, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(8, -5, 6, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(10, -5, 2.2, 0, 7); ctx.fill();
+  ctx.fillStyle = '#f4511e'; ctx.beginPath(); ctx.ellipse(14, 5, 8, 5, 0, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+function drawClassicWorld() {
+  classicScene(run.dist, H);
+  for (const p of run.pipes) {
+    const x = p.x - run.dist; if (x < -80 || x > W + 80) continue;
+    classicPipe(x, 0, p.cy - p.gap / 2, p.w, true); classicPipe(x, p.cy + p.gap / 2, H, p.w, false);
+  }
+  classicGround(run.dist, H - 60);
+}
+function outlined(t, x, y, size) {
+  ctx.font = `700 ${size}px system-ui,Segoe UI,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = size / 7; ctx.strokeStyle = '#543847'; ctx.lineJoin = 'round'; ctx.strokeText(t, x, y); ctx.fillStyle = '#fff'; ctx.fillText(t, x, y);
+}
+function drawClassicHUD() {
+  outlined(String(run.passed), W / 2, 90, 56);
+  muteBtn(W - 30, 30);
+  if (!run.started) { outlined('GET READY', W / 2, H / 2 - 80, 34); text('tap to flap', W / 2, H / 2 + 80, 18, '#fff'); }
+}
+function drawClassicEnd() {
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H);
+  outlined('GAME OVER', W / 2, 150, 44);
+  ctx.fillStyle = '#ded895'; rr(60, 200, W - 120, 170, 10); ctx.fill(); ctx.strokeStyle = '#543847'; ctx.lineWidth = 4; ctx.stroke();
+  text('SCORE', 90, 232, 14, '#e86101', 'left'); text(String(run.passed), W - 90, 258, 40, '#fff', 'right');
+  text('BEST', 90, 302, 14, '#e86101', 'left'); text(String(save.best), W - 90, 328, 40, '#fff', 'right');
+  const medal = run.passed >= 30 ? '#ffd24a' : run.passed >= 20 ? '#cfd6e0' : run.passed >= 10 ? '#c98a4a' : null;
+  if (medal) { ctx.fillStyle = medal; ctx.beginPath(); ctx.arc(116, 266, 22, 0, 7); ctx.fill(); ctx.strokeStyle = '#543847'; ctx.lineWidth = 3; ctx.stroke(); }
+  if (run.newBest) text('NEW', W - 100, 222, 14, '#f4511e', 'right');
+  const ok = () => performance.now() - deadAt > 400;
+  btn('PLAY AGAIN', 60, 400, W - 120, 52, () => { if (ok()) startRun(false); }, { color: '#e86101', size: 22 });
+  btn('TITLE', 60, 464, W - 120, 40, () => { if (ok()) state = 'title'; }, { color: '#543847', size: 16 });
+}
+
+// ---------- Live mini scene of any version (used by the title and the updates screen) ----------
+function drawMini(v, t, x, y, w, h) {
+  const f = VERS[v - 1].f, s = w / 400, sh = h / s, sp = 100;
+  const z = f.zones ? Math.floor(t / 3.5) % 5 : 0, gh = f.junk ? 8 : 52;
+  const feverOn = !!f.fever && (t % 9) > 5.5;
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.translate(x, y); ctx.scale(s, s);
+  if (!f.junk) classicScene(t * sp, sh);
+  else {
+    const Z = ZONES[z], g = ctx.createLinearGradient(0, 0, 0, sh);
+    g.addColorStop(0, feverOn ? '#3d0f4a' : Z.sky[0]); g.addColorStop(1, Z.sky[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, sh);
+    ctx.fillStyle = 'rgba(255,255,255,.04)'; for (let i = 0; i < 6; i++) ctx.fillRect((((i * 83 - t * 18) % 500) + 500) % 500 - 40, 0, 22 + (i % 3) * 8, sh);
+    if (z === 1) { ctx.fillStyle = 'rgba(190,150,230,.09)'; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc((((i * 137 - t * 25) % 560) + 560) % 560 - 80, 60 + (i * 53) % (sh - 100), 55 + (i % 3) * 20, 0, 7); ctx.fill(); } }
+    if (z === 2) { ctx.strokeStyle = 'rgba(255,140,60,.09)'; ctx.lineWidth = 18; for (let i = 0; i < 3; i++) { const xx = (((i * 190 - t * 30) % 520) + 520) % 520 - 50; ctx.beginPath(); ctx.moveTo(xx, 0); ctx.lineTo(xx + 30, sh); ctx.stroke(); } }
+    if (z === 3) { ctx.strokeStyle = 'rgba(160,200,255,.3)'; ctx.lineWidth = 1; for (let i = 0; i < 26; i++) { const xx = (((i * 47 + t * 50) % W)), yy = (i * 71 + t * 420) % sh; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx - 4, yy + 14); ctx.stroke(); } }
+    if (z === 4) { ctx.fillStyle = 'rgba(255,230,160,.6)'; for (let i = 0; i < 40; i++) ctx.fillRect((((i * 89 - t * 8) % W) + W) % W, (i * 53) % sh, 2, 2); }
+  }
+  const gap = 128 + (feverOn ? 26 : 0), top = sh - gh;
+  const by = sh / 2 + Math.sin(t * 2.2) * sh * 0.12;
+  for (let i = 0; i < 5; i++) {
+    const px = (((i * 190 - t * sp) % 950) + 950) % 950 - 120, cy = sh / 2 + Math.sin(i * 2.1) * sh * 0.14;
+    if (f.junk) { pipeBar(px, 0, cy - gap / 2, 58, ZONES[z].bar, true); pipeBar(px, cy + gap / 2, top, 58, ZONES[z].bar, false); }
+    else { classicPipe(px, 0, cy - gap / 2, 58, true); classicPipe(px, cy + gap / 2, top, 58, false); }
+    const ix = px + 124, iy = sh / 2 + Math.sin(i * 3.3 + t) * sh * 0.2, kind = i % 5;
+    if (kind === 0 && f.scrap) { ctx.fillStyle = '#ffd24a'; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(ix + k * 22, iy - Math.abs(k - 1) * 8, 8, 0, 7); ctx.fill(); } }
+    if (kind === 1 && f.drones) drawDrone({ y: iy }, ix);
+    if (kind === 2 && f.pads) { ctx.fillStyle = '#ff9a3d'; rr(ix - 15, iy - 15, 30, 30, 8); ctx.fill(); ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.moveTo(ix + 9, iy); ctx.lineTo(ix - 5, iy - 9); ctx.lineTo(ix - 5, iy + 9); ctx.fill(); }
+    if (kind === 3 && f.cards) { const qy = cy + Math.sin(t * 3) * 4; ctx.fillStyle = 'rgba(160,110,255,.35)'; ctx.beginPath(); ctx.arc(px + 29, qy, 20, 0, 7); ctx.fill(); ctx.strokeStyle = '#c9b0ff'; ctx.lineWidth = 2; ctx.stroke(); text('?', px + 29, qy, 20, '#fff'); }
+    if (kind === 4 && f.zones && z >= 2) { ctx.save(); ctx.translate(ix, iy); ctx.rotate(t * 5); ctx.fillStyle = '#c0703c'; for (let k = 0; k < 8; k++) { ctx.rotate(Math.PI / 4); ctx.fillRect(-4, -22, 8, 8); } ctx.beginPath(); ctx.arc(0, 0, 16, 0, 7); ctx.fill(); ctx.fillStyle = '#1a0f0a'; ctx.beginPath(); ctx.arc(0, 0, 5, 0, 7); ctx.fill(); ctx.restore(); }
+  }
+  if (f.zones && z === 3 && (t % 3.5) > 2.5) { ctx.fillStyle = (t % 3.5) > 2.8 ? '#fff6a8' : 'rgba(255,255,120,.18)'; ctx.fillRect(250, 0, 44, sh); }
+  if (f.guardians && (t % 10) > 6.5) {
+    const ph = (t % 10) - 6.5, lh = sh / 5;
+    for (const l of [1, 3]) { ctx.fillStyle = ph > 1.4 ? '#ff6a3d' : `rgba(255,80,60,${.15 + .15 * Math.sin(ph * 30)})`; ctx.fillRect(0, l * lh, W, lh); }
+    ctx.fillStyle = '#6a6f90'; ctx.beginPath(); ctx.ellipse(W - 14, sh / 2, 36, 64, 0, 0, 7); ctx.fill(); ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(W - 34, sh / 2 - 12, 7, 0, 7); ctx.fill();
+  }
+  if (!f.junk) classicGround(t * sp, top);
+  else { ctx.fillStyle = '#2a2418'; ctx.fillRect(0, top, W, gh); }
+  const wing = Math.sin(t * 16), rot = Math.cos(t * 2.2) * 0.25;
+  if (!f.junk) drawClassicBirdAt(110, by, rot, wing);
+  else if (f.sprite && rivetOk) drawRivetSprite(110, by, rot, Math.floor(t * 14) % 8, feverOn, false, 1);
+  else drawRivet(110, by, rot, wing, feverOn, false, 1);
+  if (feverOn) { ctx.fillStyle = 'rgba(255,79,216,.14)'; ctx.fillRect(0, 0, W, sh); text('FEVER x2', 200, 40, 20, '#ff9be8'); }
+  ctx.restore();
+}
+
+// ---------- Title and Updates screens ----------
+let pv = ver, cmp = 0.5, dragging = false;
+const PREV = { x: 20, y: 78, w: 360, h: 290 };
+function drawTitle() {
+  const t = performance.now() / 1000, V = VERS[ver - 1];
+  drawMini(ver, t, 0, 0, W, H);
+  ctx.fillStyle = 'rgba(8,10,20,.55)'; ctx.fillRect(0, 0, W, H);
+  outlined('FLAPOCALYPSE', W / 2, 150, 40);
+  rr(W / 2 - 110, 190, 220, 30, 15); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill();
+  text(`v${V.v} · ${V.name}`, W / 2, 205, 14, '#ffd24a');
+  btn(`PLAY`, 60, 300, 280, 64, () => startRun(false), { color: '#e0753a', size: 30 });
+  if (FX().workshop) btn('WORKSHOP', 60, 380, 280, 46, () => { state = 'menu'; }, { color: '#3c6df0', size: 18 });
+  btn('UPDATES', 60, FX().workshop ? 442 : 380, 280, 46, () => { pv = ver; cmp = 0.5; state = 'updates'; }, { color: '#7a4fe0', size: 18 });
+  muteBtn(W - 30, 28);
+  text(`${LATEST} updates so far. See what changed in each one.`, W / 2, H - 26, 12, '#b8c4ea', 'center', false);
+}
+function drawUpdates() {
+  const t = performance.now() / 1000, P = PREV, V = VERS[pv - 1];
+  ctx.fillStyle = '#0d1424'; ctx.fillRect(0, 0, W, H);
+  text('UPDATES', W / 2, 30, 28, '#ffd24a');
+  text(pv === 1 ? 'This is where it started.' : 'Drag the slider: left is v1.0, right is this update.', W / 2, 56, 12, '#9aa6c8', 'center', false);
+  // live preview with compare slider
+  drawMini(1, t, P.x, P.y, P.w, P.h);
+  const sx = P.x + P.w * cmp;
+  if (pv > 1) {
+    ctx.save(); ctx.beginPath(); ctx.rect(sx, P.y, P.x + P.w - sx, P.h); ctx.clip(); drawMini(pv, t, P.x, P.y, P.w, P.h); ctx.restore();
+    ctx.fillStyle = '#fff'; ctx.fillRect(sx - 1.5, P.y, 3, P.h);
+    ctx.beginPath(); ctx.arc(sx, P.y + P.h / 2, 16, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
+    text('‹ ›', sx, P.y + P.h / 2 + 1, 16, '#10131f');
+    rr(P.x + 8, P.y + 8, 78, 22, 11); ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fill(); text('v1.0 BASE', P.x + 47, P.y + 19, 11, '#fff');
+    const lab = `v${V.v}`; rr(P.x + P.w - 70, P.y + 8, 62, 22, 11); ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fill(); text(lab, P.x + P.w - 39, P.y + 19, 11, '#ffd24a');
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 2; rr(P.x, P.y, P.w, P.h, 4); ctx.stroke();
+  // version chips
+  const cw = 52, gap = 8, x0 = (W - (LATEST * cw + (LATEST - 1) * gap)) / 2;
+  for (let i = 1; i <= LATEST; i++) {
+    const cx = x0 + (i - 1) * (cw + gap), sel = i === pv;
+    btn(VERS[i - 1].v, cx, 382, cw, 32, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 14 });
+  }
+  // details card
+  rr(20, 424, 360, 148, 10); ctx.fillStyle = '#1b2442'; ctx.fill();
+  text(`${V.v}  ${V.name}`, 32, 444, 18, '#fff', 'left');
+  text(V.sum, 32, 466, 12, '#b8c4ea', 'left', false);
+  text('Looks like: ' + V.visual, 32, 484, 11.5, '#ffd24a', 'left', false);
+  V.notes.forEach((n, i) => text('• ' + n, 32, 506 + i * 15, 11.5, '#d6def5', 'left', false));
+  btn('BACK', 20, 584, 90, 44, () => { state = 'title'; }, { size: 16, color: '#2a3350' });
+  btn(pv === ver ? `PLAY v${V.v}` : `PLAY v${V.v} INSTEAD`, 120, 584, 260, 44, () => { selectVer(pv); startRun(false); }, { size: 17, color: '#e0753a' });
+}
+
 function render() {
   buttons = [];
   ctx.save();
+  if (state === 'title') { drawTitle(); ctx.restore(); return; }
+  if (state === 'updates') { drawUpdates(); ctx.restore(); return; }
   if (state === 'menu') { drawMenu(); ctx.restore(); return; }
-  if (shake > 0) ctx.translate(rng(-shake, shake) / 2, rng(-shake, shake) / 2);
+  const J = FX().junk;
+  if (shake > 0 && J) ctx.translate(rng(-shake, shake) / 2, rng(-shake, shake) / 2);
   drawWorld(); drawBird();
   for (const p of parts) { ctx.globalAlpha = Math.max(0, p.l * 2); ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, 3, 3); }
   ctx.globalAlpha = 1;
   for (const f of floaters) { ctx.globalAlpha = Math.min(1, f.l * 2); text(f.txt, f.x, f.y, 15, f.c); }
   ctx.globalAlpha = 1;
-  if (flash.a > 0) { ctx.globalAlpha = flash.a; ctx.fillStyle = flash.c; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
-  if (state !== 'dead' && state !== 'victory') drawHUD();
+  if (flash.a > 0 && J) { ctx.globalAlpha = flash.a; ctx.fillStyle = flash.c; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  if (state !== 'dead' && state !== 'victory') { if (J) drawHUD(); else drawClassicHUD(); }
   if (state === 'pick') drawPick();
-  if (state === 'dead' || state === 'victory') drawEnd();
+  if (state === 'dead' || state === 'victory') { if (J) drawEnd(); else drawClassicEnd(); }
   ctx.restore();
 }
 
@@ -672,24 +873,35 @@ function frame(ts) {
   const dt = Math.min(0.033, (ts - last) / 1000 || 0); last = ts;
   update(dt); render(); requestAnimationFrame(frame);
 }
+function toLogical(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; }
 function pointer(e) {
   e.preventDefault(); ac();
-  const r = cv.getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+  const [x, y] = toLogical(e);
   for (const b of buttons) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { SFX.click(); b.onClick(); return; }
+  if (state === 'updates' && x >= PREV.x && x <= PREV.x + PREV.w && y >= PREV.y && y <= PREV.y + PREV.h) { dragging = true; cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); return; }
   flap();
 }
 cv.addEventListener('pointerdown', pointer);
+cv.addEventListener('pointermove', e => { if (dragging) { const [x] = toLogical(e); cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); } });
+addEventListener('pointerup', () => { dragging = false; });
 addEventListener('keydown', e => {
   const k = e.code; ac();
-  if (k === 'Space' || k === 'ArrowUp' || k === 'KeyW') { e.preventDefault(); if (state === 'dead' || state === 'victory') { if (performance.now() - deadAt > 500) startRun(dailyMode); } else if (state === 'menu') startRun(false); else flap(); }
+  if (state === 'updates') {
+    if (k === 'ArrowLeft') pv = Math.max(1, pv - 1); else if (k === 'ArrowRight') pv = Math.min(LATEST, pv + 1); else if (k === 'Escape') state = 'title';
+    return;
+  }
+  if (k === 'Space' || k === 'ArrowUp' || k === 'KeyW') {
+    e.preventDefault();
+    if (state === 'dead' || state === 'victory') { if (performance.now() - deadAt > 500) startRun(dailyMode); }
+    else if (state === 'title' || state === 'menu') startRun(false); else flap();
+  }
   else if (state === 'pick' && e.key >= '1' && e.key <= '9') choose(+e.key - 1);
-  else if (e.key === 'Enter' && state === 'menu') startRun(false);
+  else if (e.key === 'Enter' && (state === 'menu' || state === 'title')) startRun(false);
 });
 
 newRun();
 requestAnimationFrame(frame);
-window.__game = { get state() { return state; }, get run() { return run; }, save, startRun, flap, choose, get cards() { return cards; }, SUMMIT, GUARDS, die };
+window.__game = { get state() { return state; }, set state(v) { state = v; }, get run() { return run; }, get save() { return save; }, selectVer, VERS, get ver() { return ver; }, startRun, flap, choose, get cards() { return cards; }, SUMMIT, GUARDS, die };
 </script>
 </body>
 </html>
