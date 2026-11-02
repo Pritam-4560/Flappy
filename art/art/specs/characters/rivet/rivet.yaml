@@ -1,0 +1,132 @@
+spritekiln: 1
+name: rivet
+kind: character
+view: side
+mirror: false
+size: 32
+palette: gothic
+camera: {scale: 0.16, center: [0, 0.05, 0], pitch: 0}
+shadow: null
+
+brief:
+  summary: Rivet, a tin-can sparrow robot. Round riveted silver body, orange leaf wing, orange beak, big eye, red-tipped antenna.
+  must_keep: [round tin body, orange wing, beak, eye, antenna]
+  simplify: [legs tucked away]
+
+ramps:
+  tin:    ["#161b2b", "#3a4766", "#65779c", "#a2b2d0", "#dbe5f5"]
+  wing:   ["#3d1408", "#8a2c0c", "#d9531a", "#ff8a2e", "#ffc260"]
+  beak:   ["#4a2306", "#a8530c", "#f08a14", "#ffc23a", "#ffe58a"]
+  plate:  ["#10131f", "#2c3550", "#4b5b82", "#7d8fb8", "#aebddb"]
+  eyew:   ["#9fb0cf", "#d8e2f3", "#ffffff"]
+  eyep:   ["#05070d", "#10131f", "#1b2238"]
+  lamp:   ["#7a0f0f", "#e02222", "#ff6a5a"]
+
+materials:
+  tin:   {ramp: tin, finish: metal, gamma: 0.62}
+  wing:  {ramp: wing, finish: soft}
+  beak:  {ramp: beak, finish: soft}
+  plate: {ramp: plate, finish: metal, gamma: 0.8}
+  eyew:  {ramp: eyew, emissive: true, band: 2, outline: true}
+  eyep:  {ramp: eyep, emissive: true, band: 0, outline: false}
+  lamp:  {ramp: lamp, emissive: true, band: 1}
+
+channels:
+  bob: 0
+  flap: 0          # wing angle about the shoulder, radians: + = tip swings down, - = up
+  tail: 0          # tail plates sway
+  tilt: 0          # body pitch
+  squash: 1
+  ant: 0           # antenna wobble
+
+bones:
+  body: {parent: root, pos: "[0, 0 + bob, 0]", rot: "[tilt, 0, 0]", scale: "[1/sqrt(squash), squash, 1/sqrt(squash)]"}
+  wing_L: {parent: body, pos: [0.50, 0.04, -0.02], rot: "[flap, 0, 0]"}
+  tailb: {parent: body, pos: [0, 0.05, -0.55], rot: "[tail, 0, 0]"}
+  antb: {parent: body, pos: [0, 0.52, 0.06], rot: "[ant, 0, 0]"}
+
+parts:
+  body:
+    material: tin
+    space: body
+    prims:
+      - ellipsoid: {c: [0, 0, 0], r: [0.46, 0.56, 0.62]}
+  belly_plate:
+    material: plate
+    space: body
+    prims:
+      - ellipsoid: {c: [0.0, -0.40, 0.10], r: [0.34, 0.12, 0.40]}
+  rivets_L:
+    material: plate
+    space: body
+    prims:
+      - sphere: {c: [0.44, 0.28, -0.10], r: 0.055}
+      - sphere: {c: [0.46, -0.02, -0.34], r: 0.055}
+      - sphere: {c: [0.44, -0.20, 0.30], r: 0.055}
+  wing_L:
+    material: wing
+    space: wing_L
+    prims:
+      - extrude:
+          c: [0.07, 0, 0]
+          rot: [0, 1.5708, 0]
+          depth: 0.16
+          round: 0.03
+          profile: {bezier: [[0.0, 0.10], [0.28, 0.52], [0.80, 0.34], [1.04, -0.02], [0.74, -0.26], [0.36, -0.34], [0.0, -0.14], [-0.06, -0.02]]}
+  tail:
+    material: plate
+    space: tailb
+    prims:
+      - extrude:
+          c: [0, 0.0, -0.18]
+          rot: [0, 1.5708, 0]
+          depth: 0.12
+          profile: {polygon: [[0.0, 0.14], [0.62, 0.34], [0.52, 0.10], [0.70, -0.04], [0.48, -0.10], [0.0, -0.14]]}
+  beak:
+    material: beak
+    space: body
+    prims:
+      - cone: {a: [0, 0.16, 0.50], b: [0, 0.10, 0.98], r: [0.18, 0.045]}
+    min_cover: 1
+  eye_L:
+    material: eyew
+    space: body
+    prims:
+      - sphere: {c: [0.30, 0.22, 0.34], r: 0.205}
+  pupil_L:
+    material: eyep
+    space: body
+    prims:
+      - sphere: {c: [0.42, 0.21, 0.42], r: 0.10}
+  antenna:
+    material: plate
+    space: antb
+    min_cover: 2
+    priority: 2
+    prims:
+      - tube: {pts: [[0, 0.0, 0.0], [0.0, 0.26, -0.03], [0.0, 0.52, 0.04]], r: [0.045, 0.03]}
+  antenna_lamp:
+    material: lamp
+    space: antb
+    priority: 2
+    prims:
+      - sphere: {c: [0, 0.58, 0.05], r: 0.10}
+
+animations:
+  fly:
+    frames: 8
+    ms: 60
+    channels:
+      flap: "-0.15 + 0.95*sin(p)"
+      bob: "0.05*sin(p + 1.2)"
+      tail: "0.22*sin(p - 0.9)"
+      tilt: "0.05*sin(p + 0.4)"
+      ant: "0.2*sin(p - 1.4)"
+  glide:
+    frames: 4
+    ms: 150
+    channels:
+      flap: "0.55 + 0.05*sin(p)"
+      bob: "0.025*sin(p)"
+      tail: "0.1*sin(p - 0.6)"
+      ant: "0.12*sin(p - 1.0)"

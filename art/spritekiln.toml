@@ -1,0 +1,42 @@
+# SpriteKiln project settings (https://github.com/LucasJRamos/spritekiln).
+# Commands run anywhere inside this folder find this file.
+
+[project]
+specs = "art/specs"        # where `spritekiln new` creates specs
+engine = "generic"       # godot | unity | monogame | generic
+ai = ["generic"]       # assistants whose files `spritekiln update` refreshes
+
+[export]
+# `spritekiln export <spec>` (or `render --export`) copies the atlas, JSON and maps here;
+# for Godot it also writes SpriteFrames, a CanvasTexture and a ready scene.
+dir = "sprites"
+
+[defaults]                # given to specs created by `spritekiln new`
+view = "side"
+size = 32
+palette = "gothic"
+camera = { pitch = 0, scale = 0.1 }
+
+[style]                   # the art style every asset follows (`spritekiln style`); change it only when asked
+recorded = 2026-11-02
+view = "side"
+height = 20               # px on screen of a human-sized character
+scale = 0.1               # camera.scale of every asset (from height)
+size = 32                 # frame px for that character
+directions = 2
+mirror = false
+palette = "gothic"
+colors = ""
+outline = "dark"
+outline_color = ""        # with outline "dark"; empty: the darkest tone of the ramps
+shading = "soft"
+lines = "depth"
+highlights = true
+dither = "none"
+light = "classic"
+proportions = "stylized"
+face = "minimal"          # minimal: eyes only, no nose; simple: + a hint of brow or nose on big heads; detailed
+animation = "fluid"
+snap = false              # root and torso move in whole pixels
+references = []
+notes = ""
