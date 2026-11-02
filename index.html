@@ -34,7 +34,7 @@ const PERMS = [
   { id: 'chaos',  name: 'Chaos Magnet',   desc: 'Start runs with +15 chaos / lvl', max: 3, cost: l => 45 + l * 50 },
   { id: 'choice', name: 'Fourth Option',  desc: 'Upgrade picks offer 4 cards',     max: 1, cost: l => 150 },
 ];
-const pl = id => save.perm[id] || 0;
+const pl = id => (dailyMode && state !== 'menu' && state !== 'dead') ? 0 : (save.perm[id] || 0);  // Daily Run ignores permanent upgrades
 
 // ---------- Temporary upgrades (chosen during a run) ----------
 const TEMPS = [
@@ -60,6 +60,13 @@ let state = 'menu';           // menu | play | pick | dead
 let run, buttons = [], cards = [], best_beat = false;
 let deadAt = 0, last = 0, shake = 0, parts = [], floaters = [];
 const rng = (a, b) => a + Math.random() * (b - a);
+// Gameplay randomness is separate from cosmetic randomness so the Daily Run is identical for everyone.
+let dailyMode = false, seedRand = Math.random;
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const grng = (a, b) => a + seedRand() * (b - a);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const dayNumber = () => Math.floor(Date.parse(todayStr()) / 864e5) - 20000;
+const hashStr = t => { let h = 2166136261; for (const ch of t) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
 
 function newRun() {
   run = {
@@ -95,7 +102,11 @@ function flap() {
   run.bird.vy = -420;
   for (let i = 0; i < 4; i++) parts.push({ x: run.bird.x - 8, y: run.bird.y + 6, vx: rng(-60, -10), vy: rng(10, 60), l: .35, c: '#e8eefc' });
 }
-function startRun() { newRun(); state = 'play'; }
+function startRun(daily) {
+  dailyMode = daily === true;
+  seedRand = dailyMode ? mulberry(hashStr('flapocalypse-' + todayStr())) : Math.random;
+  state = 'play'; newRun();
+}
 
 function addChaos(n) {
   if (chaosOn()) return;
@@ -111,7 +122,7 @@ function addScrap(base, x, y) {
   run.scrap += n; float('+' + n, x, y, '#ffd24a');
 }
 
-function hurt() {
+function hurt(why) {
   if (run.invuln > 0) return;
   if (run.shields > 0) {
     run.shields--; run.invuln = 1.2; shake = 8;
@@ -120,13 +131,17 @@ function hurt() {
     run.bird.vy = -300;
     return;
   }
-  die();
+  die(why);
 }
-function die() {
-  state = 'dead'; shake = 14;
+function die(why) {
+  state = 'dead'; run.killer = why || 'a pipe'; shake = 14;
   run.payout = run.passed * 2;           // guaranteed: even a bad run buys progress
   save.scrap += run.scrap + run.payout; save.runs++; deadAt = performance.now();
   if (run.passed > save.best) { save.best = run.passed; best_beat = true; }
+  if (dailyMode) {
+    if (!save.daily || save.daily.date !== todayStr()) save.daily = { date: todayStr(), best: 0 };
+    run.dailyNew = run.passed > save.daily.best; if (run.dailyNew) save.daily.best = run.passed;
+  }
   persist();
   for (let i = 0; i < 30; i++) parts.push({ x: run.bird.x, y: run.bird.y, vx: rng(-200, 200), vy: rng(-250, 150), l: rng(.4, 1), c: ['#ffd24a', '#ff6a3d', '#fff'][i % 3] });
 }
@@ -135,7 +150,7 @@ function offerPick(bossReward) {
   const n = pl('choice') ? 4 : 3;
   const pool = TEMPS.filter(t => tl(t.id) < t.stack);
   const picks = [];
-  while (picks.length < n && pool.length) picks.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]);
+  while (picks.length < n && pool.length) picks.push(pool.splice((seedRand() * pool.length) | 0, 1)[0]);
   if (!picks.length) return;
   cards = picks; state = 'pick'; run.pickTitle = bossReward ? 'BOSS DOWN - CLAIM A REWARD' : 'CHOOSE AN UPGRADE';
 }
@@ -153,11 +168,11 @@ function spawnPipe() {
   // limit vertical change to what the bird can climb (~300px/s sustained) in the time between pipes
   const t = run.lastSpacing / worldSpd();
   const d = Math.max(50, Math.min(240, 150 * t));
-  const gy = rng(Math.max(minY, run.lastGy - d), Math.min(maxY, run.lastGy + d * 1.4));
+  const gy = grng(Math.max(minY, run.lastGy - d), Math.min(maxY, run.lastGy + d * 1.4));
   run.lastGy = gy;
-  run.pipes.push({ x: run.spawnX, w: 58, gy, gap, passed: false, ph: rng(0, 6.28), nearGiven: false });
-  if (Math.random() < 0.75) run.scraps.push({ x: run.spawnX + 29, y: gy + rng(-gap / 4, gap / 4), r: 8, v: Math.random() < 0.1 ? 5 : 1 });
-  run.lastSpacing = rng(205, 240); run.spawnX += run.lastSpacing;
+  run.pipes.push({ x: run.spawnX, w: 58, gy, gap, passed: false, ph: grng(0, 6.28), nearGiven: false });
+  if (seedRand() < 0.75) run.scraps.push({ x: run.spawnX + 29, y: gy + grng(-gap / 4, gap / 4), r: 8, v: seedRand() < 0.1 ? 5 : 1 });
+  run.lastSpacing = grng(205, 240); run.spawnX += run.lastSpacing;
 }
 function startBoss() {
   run.boss = { t: 0, next: 0.6, id: run.bossesDone };
@@ -167,7 +182,7 @@ function startBoss() {
 function bossBeam() {
   const n = 1 + Math.min(2, run.boss.id);
   const lanes = [];
-  for (let i = 0; i < n; i++) lanes.push(rng(70, H - 70));
+  for (let i = 0; i < n; i++) lanes.push(grng(70, H - 70));
   // always leave an open lane
   for (const y of lanes) run.beams.push({ y, t: 0, warn: 0.95, fire: 0.35 });
 }
@@ -191,7 +206,7 @@ function update(dt) {
     b.vy = Math.min(maxFall(), b.vy + gravity() * dt);
     b.y += b.vy * dt;
   } else b.y = H / 2 + Math.sin(run.t * 4) * 6;
-  if (b.y > H - b.r) { b.y = H - b.r; hurt(); if (state === 'play') b.vy = -380; }
+  if (b.y > H - b.r) { b.y = H - b.r; hurt('the floor'); if (state === 'play') b.vy = -380; }
   if (b.y < b.r) { b.y = b.r; b.vy = 0; }
 
   if (!run.started) return;
@@ -209,7 +224,7 @@ function update(dt) {
     const gy = p.gy + (chaosOn() ? Math.sin(run.t * 3 + p.ph) * 55 : 0);
     p.cy = gy;
     const inX = b.x + b.r > p.x && b.x - b.r < p.x + p.w;
-    if (inX && (b.y - b.r < gy - p.gap / 2 || b.y + b.r > gy + p.gap / 2)) hurt();
+    if (inX && (b.y - b.r < gy - p.gap / 2 || b.y + b.r > gy + p.gap / 2)) hurt('a pipe');
     // near miss: passing while hugging the edge
     if (inX && !p.nearGiven) {
       const dTop = (b.y - b.r) - (gy - p.gap / 2), dBot = (gy + p.gap / 2) - (b.y + b.r);
@@ -243,7 +258,7 @@ function update(dt) {
     if (B.t < BOSS_DURATION - 1.5 && B.next <= 0) { bossBeam(); B.next = Math.max(0.55, 1.25 - B.id * 0.15); }
     for (const m of run.beams) {
       m.t += dt;
-      if (m.t > m.warn && m.t < m.warn + m.fire && Math.abs(b.y - m.y) < b.r + 14) hurt();
+      if (m.t > m.warn && m.t < m.warn + m.fire && Math.abs(b.y - m.y) < b.r + 14) hurt('the Great Pigeon');
     }
     run.beams = run.beams.filter(m => m.t < m.warn + m.fire);
     if (B.t >= BOSS_DURATION) {
@@ -354,10 +369,25 @@ function drawPick() {
     if (tl(c.id)) text(`owned x${tl(c.id)}`, W / 2, y + ch * .84, 11, '#6fe3ff', 'center', false);
   });
 }
+let copied = 0;
+function shareText() {
+  const near = save.best && run.passed === save.best - 1 ? '\nONE pipe short of my best.' : '';
+  const head = dailyMode ? `FLAPOCALYPSE Daily #${dayNumber()}` : 'FLAPOCALYPSE';
+  return `${head}\n🐦 ${run.passed} pipes · ⚙ ${run.scrap + run.payout} scrap\n💀 Killed by ${run.killer}${near}\nCan you beat me?`;
+}
+function shareRun() {
+  const t = shareText();
+  const done = () => { copied = performance.now(); };
+  try { navigator.clipboard.writeText(t).then(done, done); } catch (e) { done(); }
+}
 function drawDead() {
   ctx.fillStyle = 'rgba(5,8,16,.72)'; ctx.fillRect(0, 0, W, H);
-  text('YOU DIED', W / 2, 120, 38, '#ff6a3d');
+  text('YOU DIED', W / 2, 105, 38, '#ff6a3d');
+  const near = save.best && run.passed === save.best - 1 && !best_beat;
+  text(`${dailyMode ? 'Daily #' + dayNumber() + ' · ' : ''}killed by ${run.killer}`, W / 2, 140, 14, '#b8c4ea', 'center', false);
   text(`Pipes: ${run.passed}${best_beat ? '   NEW BEST!' : ''}`, W / 2, 175, 22, '#fff');
+  if (near) text('ONE pipe short of your best!', W / 2, 192, 12, '#ff4fd8');
+  if (dailyMode && save.daily) text(`today's best: ${save.daily.best}`, W / 2, 192, 12, run.dailyNew ? '#6fe3ff' : '#9aa6c8', 'center', false);
   text(`Scrap banked: +${run.scrap + run.payout}`, W / 2, 210, 20, '#ffd24a');
   text(`${run.scrap} collected + ${run.payout} survival bonus`, W / 2, 236, 12, '#b8c4ea', 'center', false);
   text(`Total scrap: ${save.scrap}`, W / 2, 262, 16, '#ffd24a', 'center', false);
@@ -370,8 +400,11 @@ function drawDead() {
     ctx.fillStyle = f >= 1 ? '#6fe3ff' : '#ffd24a'; rr(70, 322, (W - 140) * f, 12, 6); ctx.fill();
   }
   const ok = () => performance.now() - deadAt > 500;   // ignore panic-taps right after dying
-  btn('RUN IT BACK', 60, 370, W - 120, 60, () => { if (ok()) startRun(); }, { color: '#e0753a', size: 24 });
-  btn('UPGRADES', 100, 446, W - 200, 44, () => { if (ok()) state = 'menu'; }, { size: 16 });
+  btn('RUN IT BACK', 60, 370, W - 120, 60, () => { if (ok()) startRun(dailyMode); }, { color: '#e0753a', size: 24 });
+  btn('UPGRADES', 60, 446, 130, 44, () => { if (ok()) state = 'menu'; }, { size: 16 });
+  const just = performance.now() - copied < 1800;
+  btn(just ? 'COPIED!' : 'SHARE', 210, 446, 130, 44, () => { if (ok()) shareRun(); }, { size: 16, color: '#2f9e5e' });
+  if (just) text('result copied - paste it anywhere', W / 2, 512, 12, '#6fe3ff', 'center', false);
 }
 function drawMenu() {
   drawBackground();
@@ -388,7 +421,9 @@ function drawMenu() {
       if (can) { save.scrap -= cost; save.perm[p.id] = lvl + 1; persist(); }
     }, { disabled: !can, color: '#2f9e5e', size: 15 });
   });
-  btn('FLAP!', 60, H - 84, W - 120, 56, startRun, { color: '#e0753a', size: 26 });
+  btn('FLAP!', 20, H - 84, 210, 56, () => startRun(false), { color: '#e0753a', size: 26 });
+  btn('DAILY RUN', 240, H - 84, 140, 56, () => startRun(true), { color: '#7a4fe0', size: 16 });
+  text(`Daily #${dayNumber()}: same pipes for everyone, no upgrades${save.daily && save.daily.date === todayStr() ? ' · best ' + save.daily.best : ''}`, W / 2, H - 14, 11, '#9aa6c8', 'center', false);
 }
 function render() {
   buttons = [];
@@ -424,9 +459,9 @@ function pointer(e) {
 }
 cv.addEventListener('pointerdown', pointer);
 addEventListener('keydown', e => {
-  if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); if (state === 'dead') { if (performance.now() - deadAt > 500) startRun(); } else if (state === 'menu') startRun(); else flap(); }
+  if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); if (state === 'dead') { if (performance.now() - deadAt > 500) startRun(dailyMode); } else if (state === 'menu') startRun(false); else flap(); }
   else if (state === 'pick' && e.key >= '1' && e.key <= '9') choose(+e.key - 1);
-  else if (e.key === 'Enter' && state === 'menu') startRun();
+  else if (e.key === 'Enter' && state === 'menu') startRun(false);
 });
 
 newRun();
