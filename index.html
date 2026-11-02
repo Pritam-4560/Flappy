@@ -426,6 +426,19 @@ function drawRivet(x, y, rot, wing, fever, shield, alpha) {
   if (shield) { ctx.globalAlpha = .9; ctx.strokeStyle = '#6fe3ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 19, 0, 7); ctx.stroke(); ctx.globalAlpha = .15; ctx.fillStyle = '#6fe3ff'; ctx.fill(); }
   ctx.restore();
 }
+// ---------- Rivet sprite (pixel art, 8-frame flap cycle, 80x80 per frame) ----------
+const RIVET = new Image(); let rivetOk = false;
+RIVET.onload = () => { rivetOk = true; }; RIVET.src = 'assets/rivet_flap.png';
+function drawRivetSprite(x, y, rot, frame, fever, shield, alpha) {
+  const S = 60;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
+  if (fever) { try { ctx.filter = 'hue-rotate(280deg) saturate(1.7) brightness(1.1)'; } catch (e) {} }
+  ctx.drawImage(RIVET, frame * 80, 0, 80, 80, -S / 2, -S / 2 - 2, S, S);
+  ctx.filter = 'none';
+  if (shield) { ctx.globalAlpha = .9; ctx.strokeStyle = '#6fe3ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 24, 0, 7); ctx.stroke(); ctx.globalAlpha = .15; ctx.fillStyle = '#6fe3ff'; ctx.fill(); }
+  ctx.restore();
+}
+function rivetFrame(since, t) { return since < 0.33 ? Math.min(7, Math.floor(since * 24)) : [3, 4, 5][Math.floor(t * 5) % 3]; }
 function drawBird() {
   const b = run.bird, since = run.t - run.lastFlap;
   const wing = since < 0.22 ? Math.sin(since * 32) * 1.1 : -0.25 + Math.sin(run.t * 4) * 0.1;
@@ -436,7 +449,9 @@ function drawBird() {
     for (let i = 0; i < 14; i++) { const sy = (i * 47 + run.t * 90) % H, sx = Math.random() * W; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - 40 - Math.random() * 40, sy); ctx.stroke(); }
   }
   const blink = run.invuln > 0 && ((run.t * 20) | 0) % 2;
-  drawRivet(BX, b.y, clamp(b.vy / 700, -.5, .9), wing, run.feverT > 0, run.shields > 0, blink ? .4 : 1);
+  const rot = clamp(b.vy / 700, -.5, .9);
+  if (rivetOk) drawRivetSprite(BX, b.y, rot, rivetFrame(since, run.t), run.feverT > 0, run.shields > 0, blink ? .4 : 1);
+  else drawRivet(BX, b.y, rot, wing, run.feverT > 0, run.shields > 0, blink ? .4 : 1);
 }
 function drawDrone(d, x) {
   const y = d.y; ctx.save(); ctx.translate(x, y);
@@ -604,7 +619,8 @@ function drawEnd() {
 function drawMenu() {
   const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#16213d'); g.addColorStop(1, '#0d1424'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   text('FLAPOCALYPSE', W / 2, 34, 30, '#ffd24a');
-  drawRivet(44, 34, -0.15, Math.sin(performance.now() / 120) * 0.8, false, false, 1);
+  if (rivetOk) drawRivetSprite(44, 34, -0.1, Math.floor(performance.now() / 110) % 8, false, false, 1);
+  else drawRivet(44, 34, -0.15, Math.sin(performance.now() / 120) * 0.8, false, false, 1);
   muteBtn(W - 26, 34);
   text(`⚙ ${fmt(save.scrap)}   ·   best ${fmt(save.best)} m of ${fmt(SUMMIT)}   ·   finishes ${save.summits}`, W / 2, 64, 13, '#b8c4ea', 'center', false);
   const rowH = 92;
