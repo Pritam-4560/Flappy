@@ -37,22 +37,24 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }];
 const VERS = [
-  { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Sunny sky, green pipes, yellow bird',
+  { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
-  { v: '1.1', name: 'The Junkyard', sum: 'A junkyard world and a reason to return.', visual: 'Tin-can bird, girder pipes, dark sky',
+  { v: '1.1', name: 'The Junkyard', sum: 'A junkyard world and a reason to return.', visual: 'Tin-can bird, girder pipes',
     notes: ['Rivet, a tin-can sparrow, is the new bird', 'Girder pipes with hazard-stripe caps', 'Collect scrap, bank it when you die', 'Workshop: permanent upgrades each run', 'Distance in metres and a best line'] },
-  { v: '1.2', name: 'Drones & Launchers', sum: 'New things to hit, grab and ride.', visual: 'Drones, launchers, bubbles, pink glow',
+  { v: '1.2', name: 'Drones & Launchers', sum: 'New things to hit, grab and ride.', visual: 'Drones, launchers, pink glow',
     notes: ['Stomp junk drones by landing on them', 'Launchers rocket you past the pipes', 'Card bubbles: pick 1 of 3 upgrades', 'Fever: near-misses charge a x2 scrap mode'] },
   { v: '1.3', name: 'Five Zones', sum: 'The map changes as you fly further.', visual: 'Sky and weather shift by zone',
     notes: ['Smog Works, Rust Pipes, Storm Spire', 'Moving pipes, gears, wind and lightning', 'Every zone has its own sky and weather', 'Pipes get tighter and faster deeper in'] },
-  { v: '1.4', name: 'Guardians', sum: 'A finish line, and bosses guarding it.', visual: 'Red beam lanes, bosses, progress bar',
+  { v: '1.4', name: 'Guardians', sum: 'A finish line, and bosses guarding it.', visual: 'Beam lanes, bosses, progress bar',
     notes: ['Three guardian boss fights, 3,000 m map', 'Fly into the blue cores to hurt them', 'Finish the map in one run to win', 'Shortcut Cannons and a progress bar'] },
   { v: '1.5', name: 'Pixel Rivet', sum: 'The pixel-art update.', visual: 'Everything redrawn in pixels',
     notes: ['Pixel-art Rivet made with SpriteKiln', 'Whole game on a 100x160 pixel grid', 'Limited colour palette, pixel font', 'Synth music that speeds up in Fever'] },
-  { v: '1.6', name: 'Flow', sum: 'Made to feel good to play.', visual: 'Streaks, trails, hints, slow-mo deaths',
+  { v: '1.6', name: 'Flow', sum: 'Made to feel good to play.', visual: 'Streaks, trails, hints, slow-mo',
     notes: ['Streaks: clean pipes boost your scrap', 'Perfect passes, stomp chains, risky coins', 'Coin sounds climb, fever leaves a trail', 'Slow-motion deaths, easy start, hints', 'First upgrade bubble at 120 m, not 500 m'] },
+  { v: '1.7', name: 'Health', sum: 'One hit no longer ends the run.', visual: 'Hearts, red flash, low-HP pulse',
+    notes: ['3 hearts: a hit costs a heart, not the run', 'Shields still soak a hit before hearts', 'Heart pickups, streak and guardian heals', 'Repair Kit and Armor Plate cards', 'Last heart: red pulse and a heartbeat'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -95,6 +97,8 @@ const CARDS = [
   { id: 'engine',  name: 'Chaos Engine',  desc: 'Fever fills 40% faster',       stack: 2 },
   { id: 'spring',  name: 'Stomp Spring',  desc: 'Stomp bounce +25%',            stack: 2 },
   { id: 'wide',    name: 'Wide Berth',    desc: 'Pipe gaps +12 px',             stack: 3 },
+  { id: 'heart',   name: 'Repair Kit',    desc: 'Heal 1 heart now',             stack: 9, hp: 1 },
+  { id: 'plate',   name: 'Armor Plate',   desc: '+1 max heart and heal 1',      stack: 3, hp: 1 },
 ];
 
 // ---------- RNG: gameplay is seeded so the Daily Run is the same map for everyone ----------
@@ -149,6 +153,9 @@ const SFX = {
   zone:  () => { tone(330, 660, 0.3, 'triangle', 0.07); tone(660, 990, 0.3, 'triangle', 0.05, 0.12); },
   point: () => tone(760, 760, 0.05, 'square', 0.03),
   click: () => tone(520, 520, 0.04, 'square', 0.04),
+  hurt:  () => { tone(240, 60, 0.28, 'sawtooth', 0.12); noise(0.16, 0.1); },
+  heal:  () => [0, 1, 2].forEach(i => tone(520 * Math.pow(1.26, i), 520 * Math.pow(1.26, i), 0.12, 'triangle', 0.07, i * 0.07)),
+  beat:  () => tone(90, 55, 0.14, 'sine', 0.1),
 };
 let musT = 0, musStep = 0;
 function music(dt) {
@@ -184,7 +191,7 @@ function newRun() {
     scrap: 0, exact: 0, payout: 0, maxM: sa, passed: 0, startAlt: sa,
     gi: FX().guardians ? GUARDS.findIndex(g => g.alt > sa) : -1, fight: null, nextBubble: !FX().flow ? (Math.floor(sa / 500) + 1) * 500 : sa < 120 ? 120 : sa < 320 ? 320 : (Math.floor((sa - 320) / 400) + 1) * 400 + 320,
     phoenix: false, killer: '', victory: false, zone: zoneOf(sa), lastFlap: -9,
-    tiltV: 0, afterBoost: 0, boostEase: 0, streak: 0, bestStreak: 0, chain: 0, chainT: 0, coinCombo: 0, coinT: -9, genCount: 0, freeze: 0, dying: false, dyingT: 0, hint: '', lastHundred: Math.floor(sa / 100), spin: 0,
+    hp: FX().health ? 3 : 0, maxHp: FX().health ? 3 : 0, hearts: [], beatT: 0, tiltV: 0, afterBoost: 0, boostEase: 0, streak: 0, bestStreak: 0, chain: 0, chainT: 0, coinCombo: 0, coinT: -9, genCount: 0, freeze: 0, dying: false, dyingT: 0, hint: '', lastHundred: Math.floor(sa / 100), spin: 0,
   };
   genPipes();
 }
@@ -223,6 +230,7 @@ function addPipe() {
   // risk/reward coin hugging a pipe edge
   if (FX().flow && gc > 2 && seedRand() < 0.22) run.scraps.push({ x: p.x + p.w / 2, y: gy + (seedRand() < 0.5 ? -1 : 1) * (base / 2 - 14), r: 8, v: 3, risky: true });
   // the start of every run teaches the two big ideas: a drone to stomp at pipe 2, a launcher at pipe 6
+  if (FX().health && gc >= 8 && gc % 12 === 8) run.hearts.push({ x: midX, y: grng(150, H - 150), got: false });
   if (gc === 2 && FX().flow && FX().drones) run.drones.push({ x: midX, y0: 250, amp: 30, ph: 0, spd: 1.6, dead: false, y: 250, tut: true });
   if (gc === 6 && FX().flow && FX().pads) run.pads.push({ x: midX, y: H * 0.44, got: false, tut: true });
   run.genX += sp;
@@ -247,6 +255,11 @@ function addFever(n) {
   run.fever = Math.min(100, run.fever + n * Math.pow(1.4, cl('engine')));
   if (run.fever >= 100) { run.feverT = feverLen(); run.fever = 100; shake = 10; float('FEVER!', BX + 40, run.bird.y - 40, '#ff4fd8'); SFX.fever(); flash = { c: '#ff4fd8', a: .35 }; }
 }
+function heal(n, why) {
+  if (!FX().health) return;
+  if (run.hp >= run.maxHp) { addScrap(10, BX + 30, run.bird.y - 20); return; }
+  run.hp = Math.min(run.maxHp, run.hp + n); SFX.heal(); float('+1 HEART', BX + 30, run.bird.y - 30, '#ff7aa8'); if (why) float(why, W / 2, 150, '#ff7aa8'); flash = { c: '#f6757a', a: .22 };
+}
 function hurt(why) {
   if (run.dying || run.invuln > 0 || run.boostT > 0) return;
   if (run.streak >= 5) float('streak lost', BX + 30, run.bird.y - 40, '#aaa');
@@ -256,11 +269,17 @@ function hurt(why) {
     float('SHIELD!', BX + 30, run.bird.y - 24, '#6fe3ff'); SFX.shield(); flash = { c: '#6fe3ff', a: .25 };
     return;
   }
+  if (FX().health && run.hp > 1) {                           // a hit costs a heart, not the run
+    run.hp--; run.invuln = 1.6; shake = 9; run.freeze = 0.1; run.bird.vy = -260; SFX.hurt(); flash = { c: '#e43b44', a: .4 };
+    float('-1 HEART', BX + 30, run.bird.y - 28, '#ff7a8a');
+    for (let i = 0; i < 14; i++) parts.push({ x: BX, y: run.bird.y, vx: rng(-200, 200), vy: rng(-220, 120), l: rng(.3, .8), c: ['#e43b44', '#f6757a', '#fff'][i % 3] });
+    return;
+  }
   die(why);
 }
 function die(why) {
   if (tl('hull') >= 4 && !run.phoenix) {
-    run.phoenix = true; run.shields = 1; run.invuln = 2.5; run.bird.vy = -320;
+    run.phoenix = true; run.shields = 1; if (FX().health) run.hp = Math.max(run.hp, 2); run.invuln = 2.5; run.bird.vy = -320;
     float('PHOENIX!', BX + 30, run.bird.y - 30, '#ff9a3d'); shake = 12; return;
   }
   if (run.dying) return;
@@ -286,7 +305,7 @@ function finish(victory) {
 }
 function offerPick(rare) {
   const n = tl('salv') >= 3 ? 4 : 3;
-  const pool = CARDS.filter(c => cl(c.id) < c.stack);
+  const pool = CARDS.filter(c => cl(c.id) < c.stack && (!c.hp || FX().health));
   const picks = [];
   while (picks.length < n && pool.length) picks.push(pool.splice((pickRand() * pool.length) | 0, 1)[0]);
   if (!picks.length) return;
@@ -296,6 +315,8 @@ function choose(i) {
   const c = cards[i]; if (!c) return;
   run.cards[c.id] = cl(c.id) + 1;
   if (c.id === 'shield') run.shields++;
+  if (c.id === 'heart') heal(1, 'REPAIRED');
+  if (c.id === 'plate') { run.maxHp++; heal(1, 'ARMOR UP'); }
   state = 'play';
 }
 
@@ -304,7 +325,7 @@ const LANE_H = H / 5;
 function startFight() {
   const g = GUARDS[run.gi];
   run.fight = { gi: run.gi, hp: g.hits, step: 0, timer: 1.4, beams: [], cores: [], coreAt: 0, coreLane: 0 };
-  run.pipes = []; run.drones = []; run.gears = []; run.pads = []; run.scraps = []; run.bolts = []; run.bubbles = [];
+  run.pipes = []; run.drones = []; run.gears = []; run.pads = []; run.scraps = []; run.bolts = []; run.bubbles = []; run.hearts = [];
   float(g.name.toUpperCase(), W / 2, 200, '#ff6a3d'); shake = 8; flash = { c: '#ff6a3d', a: .3 };
 }
 function updateFight(dt) {
@@ -338,7 +359,7 @@ function endFight() {
   const F = run.fight, g = GUARDS[F.gi];
   save.beaten[F.gi] = true;
   addScrap(g.reward / scrapMul(), W / 2, 220);
-  run.shields = Math.min(3, run.shields + 1);
+  run.shields = Math.min(3, run.shields + 1); heal(1, 'GUARDIAN BONUS');
   run.fight = null; run.gi = F.gi + 1;
   if (F.gi === GUARDS.length - 1) { run.maxM = SUMMIT; finish(true); return; }
   run.genX = run.dist + W + 260; genPipes(); persist(); offerPick(true);
@@ -423,7 +444,7 @@ function update(dt) {
       if (FX().scrap && FX().flow) {
         run.streak++; if (run.streak > run.bestStreak) run.bestStreak = run.streak;
         if (Math.abs(b.y - p.cy) < p.gap * 0.16) { addScrap(1, BX + 30, b.y - 30); float('PERFECT', BX + 30, b.y - 48, '#fee761'); addFever(6); }
-        if (run.streak === 5 || run.streak === 10 || run.streak === 20 || (run.streak > 20 && run.streak % 10 === 0)) { float(run.streak + ' STREAK!', W / 2, 140, '#fee761'); SFX.milestone(); shake = 3; }
+        if (run.streak === 5 || run.streak === 10 || run.streak === 20 || (run.streak > 20 && run.streak % 10 === 0)) { float(run.streak + ' STREAK!', W / 2, 140, '#fee761'); SFX.milestone(); shake = 3; if (run.streak === 10 || run.streak === 25 || run.streak % 50 === 0) heal(1, 'STREAK BONUS'); }
       }
       if (p.minEdge < 10) { addFever(15); float('CLOSE!', BX + 30, b.y - 18, '#ff4fd8'); }
     }
@@ -460,6 +481,8 @@ function update(dt) {
       for (let i = 0; i < 5; i++) parts.push({ x: BX, y: s.y, vx: rng(-80, 80), vy: rng(-100, 40), l: .4, c: '#ffd24a' });
     }
   }
+  for (const h of run.hearts) { if (!h.got && Math.hypot(BX - (h.x - run.dist), b.y - h.y) < 28) { h.got = true; heal(1, ''); } }
+  if (FX().health && run.hp === 1) { run.beatT -= dt; if (run.beatT <= 0) { SFX.beat(); run.beatT = 0.85; } }
   for (const bu of run.bubbles) {
     if (!bu.got && Math.hypot(BX - (bu.x - run.dist), b.y - bu.p.cy) < 28) { bu.got = true; SFX.hit(); if (!save.seen.bubble) { save.seen.bubble = true; persist(); } offerPick(false); return; }
   }
@@ -470,14 +493,14 @@ function update(dt) {
   const cut = run.dist - 200;
   run.pipes = run.pipes.filter(o => o.x + o.w > cut); run.drones = run.drones.filter(o => o.x > cut && !o.dead);
   run.gears = run.gears.filter(o => o.x > cut); run.pads = run.pads.filter(o => o.x > cut && !o.got);
-  run.scraps = run.scraps.filter(o => o.x > cut && !o.got); run.bubbles = run.bubbles.filter(o => o.x > cut && !o.got);
+  run.hearts = run.hearts.filter(o => o.x > cut && !o.got); run.scraps = run.scraps.filter(o => o.x > cut && !o.got); run.bubbles = run.bubbles.filter(o => o.x > cut && !o.got);
 }
 
 // ---------- Drawing helpers ----------
 // ---------- Pixel pipeline: draw the world at full size, then snap it to a 100x160 grid and a small palette ----------
 let pixText = true;      // pixel font + stepped corners (menus always, in-game from update 1.5)
 let inWorld = false;     // true while drawing the part of the frame that gets pixelated: text waits until after
-let deferred = [];
+let deferred = [], deferMinX = null;
 const LRC = document.createElement('canvas'), LRX = LRC.getContext('2d', { willReadFrequently: true });
 let palCols = [];        // exact colours of the sprite sheet, kept intact by the palette snap
 const palCache = new Map();
@@ -581,7 +604,7 @@ function rr(x, y, w, h, r) {
   ctx.lineTo(X, Y + c); ctx.lineTo(X + s, Y + c); ctx.lineTo(X + s, Y + s); ctx.lineTo(X + c, Y + s); ctx.closePath();
 }
 function text(t, x, y, size = 16, c = '#fff', align = 'center', bold = true) {
-  if (inWorld) { const m = ctx.getTransform(); deferred.push([t, m.a * x + m.e, m.d * y + m.f, size * m.a, c, align, bold]); return; }
+  if (inWorld) { const m = ctx.getTransform(), sx = m.a * x + m.e; if (deferMinX !== null && sx < deferMinX) return; deferred.push([t, sx, m.d * y + m.f, size * m.a, c, align, bold]); return; }
   if (pixText) { pixTextDraw(t, x, y, size, c, align, null); return; }
   ctx.font = `${bold ? '700 ' : ''}${size}px system-ui,Segoe UI,sans-serif`;
   ctx.fillStyle = c; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y);
@@ -637,6 +660,13 @@ function drawRivetSprite(x, y, col, row, fever, shield, alpha) {
   ctx.filter = 'none';
   if (shield) { ctx.globalAlpha = .9; ctx.strokeStyle = '#6fe3ff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(X, Y, 38, 0, 7); ctx.stroke(); }
   ctx.restore();
+}
+const HEART = ['.XX.XX.', 'XXXXXXX', 'XXXXXXX', '.XXXXX.', '..XXX..', '...X...'];
+function drawHeartPx(x, y, u, col, hi) {
+  const pass = (ox, oy, c) => { ctx.fillStyle = c; for (let r = 0; r < 6; r++) for (let q = 0; q < 7; q++) if (HEART[r][q] === 'X') ctx.fillRect(x + q * u + ox, y + r * u + oy, u, u); };
+  for (const [ox, oy] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) pass(ox, oy, '#181425');
+  pass(0, 0, col);
+  if (hi) { ctx.fillStyle = hi; ctx.fillRect(x + u, y + u, u, u); }
 }
 function drawBird() { if (!FX().junk) { const b = run.bird, since = run.t - run.lastFlap; drawClassicBirdAt(BX, b.y, clamp(b.vy / 600, -.45, 1.1), since < 0.25 ? Math.sin(since * 40) : 0); return; } drawJunkBird(); }
 function drawJunkBird() {
@@ -728,6 +758,7 @@ function drawWorld() {
     pipeBar(x, 0, p.cy - p.gap / 2, p.w, ZONES[p.z], true);
     pipeBar(x, p.cy + p.gap / 2, H, p.w, ZONES[p.z], false);
   }
+  for (const h of run.hearts) { const x = h.x - d; if (x < -40 || x > W + 40) continue; drawHeartPx(Math.round((x - 14) / 4) * 4, Math.round((h.y - 12 + Math.sin(run.t * 4) * 3) / 4) * 4, 4, '#e43b44', '#f6757a'); }
   for (const s of run.scraps) { const x = s.x - d; if (x < -20 || x > W + 20) continue; ctx.fillStyle = s.v > 1 ? '#6fe3ff' : '#ffd24a'; ctx.beginPath(); ctx.arc(x, s.y, s.r, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(x, s.y, s.r * .45, 0, 7); ctx.fill(); }
   for (const bu of run.bubbles) { const x = bu.x - d; if (x < -40 || x > W + 40) continue; const y = bu.p.cy + Math.sin(run.t * 3) * 4; ctx.fillStyle = 'rgba(160,110,255,.35)'; ctx.beginPath(); ctx.arc(x, y, 20, 0, 7); ctx.fill(); ctx.strokeStyle = '#c9b0ff'; ctx.lineWidth = 2; ctx.stroke(); text('?', x, y, 20, '#fff'); }
   for (const p of run.pads) { const x = p.x - d; if (x < -30 || x > W + 30) continue; ctx.fillStyle = '#ff9a3d'; rr(x - 15, p.y - 15, 30, 30, 8); ctx.fill(); ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.moveTo(x + 9, p.y); ctx.lineTo(x - 5, p.y - 9); ctx.lineTo(x - 5, p.y + 9); ctx.fill(); }
@@ -764,8 +795,10 @@ function drawHUD() {
   text(fmt(run.maxM) + ' m', 14, 38, 26, '#fff', 'left');
   if (FX().scrap) text('⚙ ' + run.scrap, W - 14, 38, 16, '#ffd24a', 'right');
   text('best ' + fmt(save.best) + ' m', W - 14, 58, 12, '#9aa6c8', 'right');
-  if (run.shields) text('🛡 ' + run.shields, 14, 64, 15, '#6fe3ff', 'left');
-  if (run.streak >= 3) text('STREAK ' + run.streak + (run.streak >= 5 ? '  +' + Math.min(60, run.streak * 4) + '%' : ''), 14, 86, 12, '#fee761', 'left');
+  const yo = FX().health ? 22 : 0;
+  if (FX().health) for (let i = 0; i < run.maxHp; i++) drawHeartPx(14 + i * 26, 56, 3, i < run.hp ? '#e43b44' : '#3a4466', i < run.hp ? '#f6757a' : null);
+  if (run.shields) text('🛡 ' + run.shields, 14, 64 + yo, 15, '#6fe3ff', 'left');
+  if (run.streak >= 3) text('STREAK ' + run.streak + (run.streak >= 5 ? '  +' + Math.min(60, run.streak * 4) + '%' : ''), 14, 86 + yo, 12, '#fee761', 'left');
   if (run.afterBoost > 0 && ((run.t * 4) | 0) % 2 === 0) text('INVINCIBLE - FIND YOUR RHYTHM', W / 2, 126, 13, '#6fe3ff');
   else if (run.hint && ((run.t * 3) | 0) % 2 === 0) text(run.hint, W / 2, 126, 14, '#fee761');
   if (FX().fever) {
@@ -981,7 +1014,8 @@ function drawMini(v, t, x, y, w, h, sc) {
   if (!f.junk) drawClassicBirdAt(110, by, rot, wing);
   else if (f.sprite && rivetOk) drawRivetSprite(110, by, Math.floor(t * 14) % 8, rivetRowFor(Math.cos(t * 2.2) * sh * 0.12 * 2.2 * 2.2), feverOn, false, 1);
   else drawRivet(110, by, rot, wing, feverOn, false, 1);
-  if (f.flow) { text('STREAK ' + (4 + Math.floor(t * 1.3) % 9), 14, 24, 14, '#fee761', 'left'); if (((t * 2) | 0) % 2) text('PERFECT', 118, by - 40, 12, '#fee761'); for (let q = 0; q < 8; q++) { ctx.fillStyle = ['#f6757a', '#feae34', '#fee761', '#2ce8f5'][q % 4]; ctx.fillRect(100 - q * 10, by + Math.sin(t * 9 + q) * 6, 8, 8); } }
+  if (f.health) { const lost = ((t * 0.7) | 0) % 2; for (let i = 0; i < 3; i++) drawHeartPx(236 + i * 26, 48, 3, i < 3 - lost ? '#e43b44' : '#3a4466', i < 3 - lost ? '#f6757a' : null); }
+  if (f.flow) { text('STREAK ' + (4 + Math.floor(t * 1.3) % 9), 236, 28, 14, '#fee761', 'left'); if (((t * 2) | 0) % 2) text('PERFECT', 118, by - 40, 12, '#fee761'); for (let q = 0; q < 8; q++) { ctx.fillStyle = ['#f6757a', '#feae34', '#fee761', '#2ce8f5'][q % 4]; ctx.fillRect(100 - q * 10, by + Math.sin(t * 9 + q) * 6, 8, 8); } }
   if (feverOn) { ctx.fillStyle = 'rgba(255,79,216,.14)'; ctx.fillRect(0, 0, W, sh); text('FEVER x2', 200, 40, 20, '#ff9be8'); }
   ctx.restore();
 }
@@ -1011,7 +1045,7 @@ function drawUpdates() {
   const sx = P.x + P.w * cmp;
   inWorld = true;
   drawMini(1, t, P.x, P.y, P.w, P.h, 1);
-  if (pv > 1) { ctx.save(); ctx.beginPath(); ctx.rect(sx, P.y, P.x + P.w - sx, P.h); ctx.clip(); drawMini(pv, t, P.x, P.y, P.w, P.h, 1); ctx.restore(); }
+  if (pv > 1) { ctx.save(); ctx.beginPath(); ctx.rect(sx, P.y, P.x + P.w - sx, P.h); ctx.clip(); deferMinX = sx; drawMini(pv, t, P.x, P.y, P.w, P.h, 1); deferMinX = null; ctx.restore(); }
   inWorld = false; pixelate(P.x, P.y, P.w, P.h); flushText();
   if (pv > 1) {
     ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(sx / 4) * 4 - 2, P.y, 4, P.h);
@@ -1022,7 +1056,7 @@ function drawUpdates() {
   }
   ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 2; rr(P.x, P.y, P.w, P.h, 4); ctx.stroke();
   // version chips
-  const cw = 48, gap = 6, x0 = (W - (LATEST * cw + (LATEST - 1) * gap)) / 2;
+  const cw = 42, gap = 5, x0 = (W - (LATEST * cw + (LATEST - 1) * gap)) / 2;
   for (let i = 1; i <= LATEST; i++) {
     const cx = x0 + (i - 1) * (cw + gap), sel = i === pv;
     btn(VERS[i - 1].v, cx, 382, cw, 32, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 14 });
@@ -1058,6 +1092,10 @@ function render() {
   for (const f of floaters) { ctx.globalAlpha = Math.min(1, f.l * 2); text(f.txt, f.x, f.y, 15, f.c); }
   ctx.globalAlpha = 1;
   if (flash.a > 0 && J) { ctx.globalAlpha = flash.a; ctx.fillStyle = flash.c; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  if (FX().health && run.hp === 1 && !run.dying && state === 'play') {
+    const a = 0.22 + 0.16 * Math.sin(performance.now() / 160); ctx.fillStyle = `rgba(228,59,68,${a})`;
+    ctx.fillRect(0, 0, W, 8); ctx.fillRect(0, H - 8, W, 8); ctx.fillRect(0, 0, 8, H); ctx.fillRect(W - 8, 0, 8, H);
+  }
   if (state !== 'dead' && state !== 'victory') { if (J) drawHUD(); else drawClassicHUD(); }
   if (state === 'pick') drawPick();
   if (state === 'dead' || state === 'victory') { if (J) drawEnd(); else drawClassicEnd(); }
@@ -1098,7 +1136,7 @@ addEventListener('keydown', e => {
 
 newRun();
 requestAnimationFrame(frame);
-window.__game = { get state() { return state; }, set state(v) { state = v; }, get run() { return run; }, get save() { return save; }, selectVer, VERS, get ver() { return ver; }, startRun, flap, choose, get cards() { return cards; }, SUMMIT, GUARDS, die };
+window.__game = { get state() { return state; }, set state(v) { state = v; }, get run() { return run; }, get save() { return save; }, selectVer, VERS, get ver() { return ver; }, startRun, flap, choose, get cards() { return cards; }, SUMMIT, GUARDS, die, hurt };
 </script>
 </body>
 </html>
