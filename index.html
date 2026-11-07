@@ -39,7 +39,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -65,6 +65,8 @@ const VERS = [
     notes: ['Sliding pipes that sway side to side', 'Cheese pipes with three holes to pick', 'Shutter pipes whose gap jumps', 'Springs, jaws, splits and gravity gates', 'Slalom runs. New pipes arrive zone by zone'] },
   { v: '1.11', name: 'Wide View', sum: 'Pulled the camera back so you can see more.', visual: 'Wider view, smaller world',
     notes: ['The camera zooms out 25 percent', 'See pipes and hazards earlier', 'More sky, more skyline, more room to plan', 'Same pixel art, finer pixel grid', 'Moving pipes are easier to read'] },
+  { v: '1.12', name: 'Rivet Reacts', sum: 'Rivet has feelings now, and shows them.', visual: 'Faces, hops, hearts, stars',
+    notes: ['Happy hops, coin sparkles, cheer backflips', 'Love hearts when healed. Boss redone', 'Ouch: X eyes and spinning stars', 'Boss fear sweat, fist pump on hits', 'Fever grin, boost squint, dizzy flips'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -371,7 +373,7 @@ function startFight() {
 }
 function updateFight(dt) {
   const F = run.fight, g = GUARDS[F.gi], b = run.bird, r = hitR();
-  F.age += dt; F.timer -= dt;
+  F.age += dt; F.timer -= dt; F.hitT = Math.max(0, (F.hitT || 0) - dt);
   if (F.timer <= 0) {
     const lanes = g.pat[F.step % g.pat.length]; F.step++;
     for (const l of lanes) F.beams.push({ lane: l, t: 0, warn: 0.95, fire: 0.4 });
@@ -388,8 +390,8 @@ function updateFight(dt) {
   F.beams = F.beams.filter(m => m.t < m.warn + m.fire);
   for (const c of F.cores) {
     c.t += dt; c.x -= 170 * dt;
-    if (!c.got && Math.hypot(BX - c.x, b.y - c.y) < 26) {
-      c.got = true; F.hp--; shake = 6; SFX.hit(); float('HIT!', c.x, c.y, '#6fe3ff');
+    if (!c.got && Math.hypot(BX - c.x, b.y - c.y) < 36) {
+      c.got = true; F.hp--; F.hitT = 0.3; shake = 6; SFX.hit(); float('HIT!', c.x, c.y, '#6fe3ff');
       for (let i = 0; i < 12; i++) parts.push({ x: c.x, y: c.y, vx: rng(-150, 150), vy: rng(-150, 150), l: .5, c: '#6fe3ff' });
     }
   }
@@ -426,7 +428,7 @@ function update(dt) {
   }
   if (run.freeze > 0) { run.freeze -= dt; return; }  // tiny hit-stop on big moments
   const gd = run.gravDir;
-  run.t += dt; if (FX().music) music(dt);
+  run.t += dt; if (FX().music) music(dt); if (FX().emote) trackEmotes(dt);
   if (FX().flow && run.chain > 0) { run.chainT -= dt; if (run.chainT <= 0) run.chain = 0; }
   if (run.invuln > 0) run.invuln -= dt;
   if (run.feverT > 0) {
@@ -804,6 +806,65 @@ function drawHeartPx(x, y, u, col, hi) {
   if (hi) { ctx.fillStyle = hi; ctx.fillRect(x + u, y + u, u, u); }
 }
 function drawBird() { if (!FX().junk) { const b = run.bird, since = run.t - run.lastFlap; drawClassicBirdAt(BX, b.y, clamp(b.vy / 600, -.45, 1.1), since < 0.25 ? Math.sin(since * 40) : 0); return; } drawJunkBird(); }
+// ---------- Rivet's feelings: timed reactions plus standing moods ----------
+const EMO = { happy: [0.5, 1], coin: [0.32, 1], cheer: [1.0, 3], love: [1.2, 3], ouch: [1.1, 6], shield: [0.7, 4], dizzy: [1.3, 2], bounce: [0.55, 2], scared: [1.4, 4], pump: [0.9, 3] };
+function emote(type) { const d = EMO[type]; if (!run || !d) return; const c = run.emo; if (c && c.t < c.dur && EMO[c.type][1] > d[1]) return; run.emo = { type, t: 0, dur: d[0] }; }
+function trackEmotes(dt) {
+  const r = run, s = r.em2 || (r.em2 = { streak: 0, scrap: 0, hp: r.hp, sh: r.shields, chain: 0, grav: 1, fight: false, fhp: null, passed: 0 });
+  if (r.emo) r.emo.t += dt;
+  if (r.hp < s.hp) emote('ouch'); else if (r.shields < s.sh) emote('shield'); else if (r.hp > s.hp) emote('love');
+  if (r.passed > s.passed) emote(r.streak > 0 && r.streak % 5 === 0 ? 'cheer' : 'happy');
+  if (r.scrap > s.scrap) emote('coin');
+  if (r.chain > s.chain) emote('bounce');
+  if (r.gravDir !== s.grav) emote('dizzy');
+  if (!!r.fight !== s.fight) emote(r.fight ? 'scared' : 'cheer');
+  if (r.fight && s.fhp !== null && r.fight.hp < s.fhp) emote('pump');
+  s.streak = r.streak; s.scrap = r.scrap; s.hp = r.hp; s.sh = r.shields; s.chain = r.chain; s.grav = r.gravDir; s.fight = !!r.fight; s.fhp = r.fight ? r.fight.hp : null; s.passed = r.passed;
+}
+function moodNow() {
+  const e = run.emo;
+  if (e && e.t < e.dur) return { type: e.type, k: e.t / e.dur, t: e.t };
+  if (run.dying) return { type: 'dead', k: 0, t: run.t };
+  if (run.boostT > 0) return { type: 'zoom', k: 0, t: run.t };
+  if (run.feverT > 0) return { type: 'fever', k: 0, t: run.t };
+  if (FX().health && run.hp === 1) return { type: 'worried', k: 0, t: run.t };
+  if (!run.started) return { type: 'wait', k: 0, t: run.t };
+  return { type: 'calm', k: 0, t: run.t };
+}
+function plus(x, y, col, s = 4) { ctx.fillStyle = col; ctx.fillRect(Math.round(x / 4) * 4 - s, Math.round(y / 4) * 4, s * 3, s); ctx.fillRect(Math.round(x / 4) * 4, Math.round(y / 4) * 4 - s, s, s * 3); }
+function drawFace(type, k, t) {
+  const ex = 8, ey = -4, D = '#181425', blinkNow = (t % 3.2) > 3.05;
+  const patch = () => { ctx.fillStyle = '#a2b2d0'; ctx.beginPath(); ctx.arc(ex, ey, 9, 0, 7); ctx.fill(); };
+  const B = (x, y, w = 4, h = 4, c = D) => { ctx.fillStyle = c; ctx.fillRect(ex + x, ey + y, w, h); };
+  if (type === 'happy' || type === 'cheer' || type === 'pump') { patch(); B(-8, 0); B(-4, -4); B(0, -4); B(4, 0); }
+  else if (type === 'coin') { patch(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, ey, 8, 0, 7); ctx.fill(); plus(ex, ey - 4, '#feae34', 4); }
+  else if (type === 'love') { patch(); drawHeartPx(ex - 9, ey - 8, 3, '#e43b44', '#ff8aa8'); }
+  else if (type === 'ouch' || type === 'dead') { patch(); B(-8, -8); B(-4, -4); B(0, 0); B(4, 4); B(4, -8); B(0, -4); B(-4, 0); B(-8, 4); }
+  else if (type === 'shield') { patch(); B(-8, -8); B(-4, -4); B(0, 0); B(-4, 4); B(-8, 8); }
+  else if (type === 'dizzy') { patch(); const q = Math.floor(t * 12) % 2; B(-8, -8, 16, 4); B(-8, -8, 4, 16); B(-8, 4, 16, 4); B(4, -8, 4, 12); B(-4, -4, 8, 4, q ? D : '#a2b2d0'); B(-4, -4, 4, 8, q ? '#a2b2d0' : D); }
+  else if (type === 'scared') { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, ey, 11, 0, 7); ctx.fill(); ctx.strokeStyle = D; ctx.lineWidth = 3; ctx.stroke(); B(-2 + Math.round(Math.sin(t * 40)), -2, 4, 4); }
+  else if (type === 'zoom') { patch(); B(-10, -2, 20, 4); B(-10, -8, 8, 4); B(-2, -6, 4, 4); }
+  else if (type === 'fever') { patch(); plus(ex, ey - 4, Math.floor(t * 10) % 2 ? '#feae34' : '#e43b44', 4); }
+  else if (type === 'worried') { patch(); B(-8, -8, 12, 4); B(-4, -4, 4, 4); B(0, 0, 4, 4, '#fff'); B(-4, 0, 4, 4); }
+  else if ((type === 'wait' || type === 'calm') && blinkNow) { patch(); B(-8, 0, 16, 4); }
+}
+function drawEmoFx(type, k, t, bx, by) {
+  ctx.save();
+  if (type === 'love') for (let i = 0; i < 3; i++) { const yy = by - 34 - k * 56 - i * 14, xx = bx - 22 + i * 22 + Math.sin(t * 6 + i) * 6; ctx.globalAlpha = Math.max(0, 1 - k); drawHeartPx(Math.round(xx / 4) * 4, Math.round(yy / 4) * 4, 3, '#e43b44', '#ff8aa8'); }
+  else if (type === 'cheer' || type === 'pump') for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + t * 3, rr_ = 24 + k * 42; ctx.globalAlpha = Math.max(0, 1 - k); plus(bx + Math.cos(a) * rr_, by + Math.sin(a) * rr_, i % 2 ? '#fee761' : '#fff', 4); }
+  else if (type === 'ouch') for (let i = 0; i < 3; i++) { const a = t * 9 + i * 2.1; plus(bx + Math.cos(a) * 30, by - 38 + Math.sin(a) * 8, '#fee761', 4); }
+  else if (type === 'dizzy') for (let i = 0; i < 3; i++) { const a = -t * 8 + i * 2.1; plus(bx + Math.cos(a) * 28, by - 36 + Math.sin(a) * 9, '#b055ff', 4); }
+  else if (type === 'shield') for (let i = 0; i < 6; i++) { const a = i * 1.05 + t * 4; ctx.globalAlpha = Math.max(0, 1 - k); plus(bx + Math.cos(a) * (36 + k * 14), by + Math.sin(a) * (36 + k * 14), '#6fe3ff', 4); }
+  else if (type === 'coin') { ctx.globalAlpha = 1 - k; plus(bx + 36, by - 12 - k * 10, '#fee761', 4); plus(bx - 2, by - 40 - k * 8, '#fff', 4); }
+  else if (type === 'happy') { ctx.globalAlpha = 1 - k; plus(bx + 30, by - 32 - k * 12, '#fff', 4); }
+  else if (type === 'bounce') { if (k < 0.8) { ctx.fillStyle = D2; ctx.fillRect(bx - 8, by - 66, 16, 28); ctx.fillStyle = '#fee761'; ctx.fillRect(bx - 4, by - 62, 8, 16); ctx.fillRect(bx - 4, by - 42, 8, 4); } }
+  else if (type === 'scared') { ctx.fillStyle = '#6fe3ff'; for (let i = 0; i < 2; i++) { const dy = ((t * 30 + i * 12) % 24); ctx.globalAlpha = 1 - dy / 24; ctx.fillRect(bx - 24 + i * 44, by - 30 + dy, 4, 8); } ctx.globalAlpha = 1; if (Math.floor(t * 8) % 2) { ctx.fillStyle = '#e43b44'; ctx.fillRect(bx - 4, by - 76, 8, 20); ctx.fillRect(bx - 4, by - 52, 8, 8); } }
+  else if (type === 'worried') { const dy = (t * 14) % 22; ctx.fillStyle = '#6fe3ff'; ctx.globalAlpha = 1 - dy / 22; ctx.fillRect(bx + 8, by - 22 + dy, 4, 8); }
+  else if (type === 'fever') for (let i = 0; i < 9; i++) { ctx.fillStyle = ['#e43b44', '#feae34', '#fee761', '#63c74d', '#2ce8f5', '#b055ff'][i % 6]; ctx.globalAlpha = 1 - i / 10; ctx.fillRect(Math.round((bx - 38 - i * 12) / 4) * 4, Math.round((by + Math.sin(t * 12 + i * .8) * 10 + 4) / 4) * 4, 8, 8); }
+  else if (type === 'dead') for (let i = 0; i < 3; i++) { const a = t * 6 + i * 2.1; plus(bx + Math.cos(a) * 30, by - 38 + Math.sin(a) * 8, '#fff', 4); }
+  ctx.restore();
+}
+const D2 = '#181425';
 function drawJunkBird() {
   const b = run.bird, since = run.t - run.lastFlap;
   const wing = since < 0.22 ? Math.sin(since * 32) * 1.1 : -0.25 + Math.sin(run.t * 4) * 0.1;
@@ -815,7 +876,35 @@ function drawJunkBird() {
   }
   const blink = run.invuln > 0 && ((run.t * 20) | 0) % 2;
   const rot = clamp(b.vy / 700, -.5, .9);
-  if (rivetOk && FX().sprite) { const row = run.dying ? 6 : run.boostT > 0 ? 0 : rivetRowFor(run.tiltV || 0), c = rivetCell(since, run.t, row); drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0); }
+  if (rivetOk && FX().sprite) {
+    const row = run.dying ? 6 : run.boostT > 0 ? 0 : rivetRowFor(run.tiltV || 0), c = rivetCell(since, run.t, row);
+    if (!FX().emote) { drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0); }
+    else {
+      const m = moodNow(), k = m.k, t = m.t; let sx = 1, sy = 1, rot = 0, ox = 0, oy = 0; const PI = Math.PI;
+      if (since < 0.18) { sy = 1 + 0.14 * (1 - since / 0.18); sx = 1 / sy; }
+      switch (m.type) {
+        case 'happy': oy = -Math.sin(k * PI) * 10; break;
+        case 'coin': sx *= 1 + .1 * Math.sin(k * PI); sy *= 1 - .08 * Math.sin(k * PI); break;
+        case 'cheer': rot = -k * 2 * PI; oy = -Math.sin(k * PI) * 12; break;
+        case 'love': rot = Math.sin(t * 10) * .12; oy = Math.sin(t * 5) * 3; break;
+        case 'ouch': ox = Math.sin(t * 60) * 5 * (1 - k); rot = Math.sin(t * 40) * .25 * (1 - k); sx *= 1.12; sy *= .88; break;
+        case 'shield': sx *= 1.12; sy *= .9; break;
+        case 'dizzy': rot = Math.sin(t * 14) * .3; break;
+        case 'bounce': if (k < .3) { sx *= 1.25; sy *= .75; } else { sx *= .85; sy *= 1.2; } break;
+        case 'scared': ox = Math.sin(t * 50) * 3; sx *= .94; sy *= 1.06; break;
+        case 'pump': rot = k * 2 * PI; oy = -Math.sin(k * PI) * 10; break;
+        case 'zoom': sx *= 1.2; sy *= .88; break;
+        case 'fever': oy = Math.sin(t * 14) * 2.5; sx *= 1 + .05 * Math.sin(t * 14); break;
+        case 'worried': ox = Math.sin(t * 40) * 1.5; break;
+        case 'wait': oy = Math.sin(t * 3) * 3; rot = Math.sin(t * 1.5) * .08; break;
+      }
+      ctx.save(); ctx.translate(BX + ox, b.y + oy); ctx.rotate(rot); ctx.scale(sx, sy); ctx.translate(-BX, -b.y);
+      drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0);
+      ctx.save(); ctx.translate(Math.round(BX / 4) * 4, Math.round(b.y / 4) * 4); if (run.gravDir < 0) ctx.scale(1, -1); ctx.globalAlpha = blink ? .4 : 1; drawFace(m.type, k, t); ctx.restore();
+      ctx.restore();
+      drawEmoFx(m.type, k, t, BX + ox, b.y + oy);
+    }
+  }
   else drawRivet(BX, b.y, rot, wing, run.feverT > 0, run.shields > 0, blink ? .4 : 1);
 }
 function drawDrone(d, x) {
@@ -1029,6 +1118,36 @@ function drawScenery(z, d, t, hh, floorY, vw = W) {
   }
 }
 
+function drawBoss(gi, bx, by, t, charging, firing, hit) {
+  const G = 8, X = bx - 64, Y = Math.round((by - 64) / 4) * 4;
+  const c = (x, y, col, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(X + x * G, Y + y * G, w * G, h * G); };
+  const cols = hit ? ['#fff', '#fff', '#fff'] : [['#3a4466', '#5a6988', '#8b9bb4'], ['#5a4a6a', '#8a7aa0', '#c0b0d8'], ['#3a3050', '#5a4a80', '#8a78c0']][gi];
+  const bob = Math.round(Math.sin(t * 6) * 0.5);
+  const flap = Math.sin(t * (charging ? 16 : 7));
+  if (gi === 0) {            // Junk Hawk: wings, hooked beak
+    const wy = flap > 0 ? -2 : 1; c(6, 1 + wy, '#262b44', 7, 2); c(4, 3 + wy, '#262b44', 9, 2); c(8, 12 - wy, '#262b44', 6, 2); c(10, 14 - wy, '#262b44', 4, 1);
+    c(2, 0 + wy, cols[0], 3, 1);
+  } else if (gi === 1) {     // Great Pigeon: fat body, crown, wings
+    const wy = flap > 0 ? -3 : 0; c(8, 2 + wy, cols[0], 6, 3); c(10, 0 + wy, cols[1], 4, 2);
+    c(6, 0, '#feae34', 1, 2); c(8, -1, '#feae34', 1, 2); c(10, -1, '#feae34', 1, 2);
+  } else {                   // Storm Engine: boxy, spinning gears
+    const gA = Math.floor(t * 6) % 2; for (const [gx, gy] of [[1, 1], [12, 1], [1, 12], [12, 12]]) { c(gx, gy, '#feae34', 3, 3); c(gx + 1, gy + 1, '#262b44', 1, 1); if (gA) { c(gx - 1, gy + 1, '#feae34'); c(gx + 3, gy + 1, '#feae34'); } else { c(gx + 1, gy - 1, '#feae34'); c(gx + 1, gy + 3, '#feae34'); } }
+    c(7, -2, '#8b9bb4', 1, 3); c(7, -3, firing ? '#fff' : '#feae34');
+  }
+  // body
+  const cx = 8, cy = 8 + bob, rx = gi === 2 ? 6.5 : gi === 1 ? 7 : 6, ry = gi === 1 ? 7 : 6.5;
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - (cy)) / ry; const d = gi === 2 ? Math.max(Math.abs(dx), Math.abs(dy)) * 1.15 : Math.hypot(dx, dy);
+    if (d > 1) continue; c(x, y, d > 0.86 ? '#181425' : (dx + dy < -0.5 ? cols[2] : dx + dy < 0.35 ? cols[1] : cols[0]));
+  }
+  // face
+  const ex = gi === 2 ? 4 : 3;
+  c(ex, 5 + bob, '#fff', 3, 3); c(ex, 6 + bob, hit ? '#181425' : (charging ? '#feae34' : '#e43b44'), 2, 2); c(ex, 5 + bob, '#181425', 3, 1);
+  if (gi === 1) { c(ex + 4, 5 + bob, '#fff', 2, 2); c(ex + 4, 6 + bob, '#e43b44', 1, 1); }
+  if (gi === 0) { c(-1, 8 + bob, '#feae34', 3, 1); c(-1, 9 + bob, '#f08a14', 2, 1); c(0, 10 + bob, '#f08a14', 1, 1); }
+  // cannon mouth lights up while charging and firing
+  c(0, 10 + bob, '#181425', 3, 2); if (charging || firing) c(0, 10 + bob, firing ? '#fff' : (Math.floor(t * 14) % 2 ? '#feae34' : '#e43b44'), 2, 1);
+}
 function drawWorld() {
   if (!FX().junk) { drawClassicWorld(); return; }
   const m = state === 'menu' ? 0 : mOf(), z = zoneOf(m), Z = ZONES[z];
@@ -1063,14 +1182,41 @@ function drawWorld() {
   const F = run.fight;
   if (F) {
     const gd = GUARDS[F.gi];
-    for (const m2 of F.beams) { const y0 = m2.lane * LANE_H; if (m2.t <= m2.warn) { ctx.fillStyle = `rgba(255,80,60,${.12 + .12 * Math.sin(m2.t * 30)})`; ctx.fillRect(0, y0, VW, LANE_H); } else { ctx.fillStyle = '#ff6a3d'; ctx.fillRect(0, y0, VW, LANE_H); ctx.fillStyle = '#fff'; ctx.fillRect(0, y0 + LANE_H / 2 - 5, VW, 10); } }
-    for (const c of F.cores) { ctx.fillStyle = '#6fe3ff'; ctx.beginPath(); ctx.arc(c.x, c.y, 11 + Math.sin(c.t * 8) * 2, 0, 7); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
-    const by = VH / 2 + Math.sin(run.t * 1.4) * 170;
-    ctx.fillStyle = '#6a6f90'; ctx.beginPath(); ctx.ellipse(VW - 14, by, 36, 64, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(VW - 34, by - 12, 7, 0, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,.5)'; rr(60, 76, VW - 120, 10, 5); ctx.fill();
-    ctx.fillStyle = '#6fe3ff'; rr(60, 76, (VW - 120) * F.hp / gd.hits, 10, 5); ctx.fill();
-    text(`${gd.name.toUpperCase()}: fly into the blue cores`, VW / 2, 98, 12, '#b8e8ff');
+    const tt = run.t;
+    for (const m2 of F.beams) {
+      const y0 = m2.lane * LANE_H;
+      if (m2.t <= m2.warn) {
+        const k = m2.t / m2.warn, bl = Math.floor(m2.t * 10) % 2;
+        ctx.fillStyle = `rgba(255,80,60,${.10 + .10 * bl})`; ctx.fillRect(0, y0, VW, LANE_H);
+        ctx.fillStyle = bl ? '#ffd24a' : '#e43b44';
+        for (let q = 0; q < 3; q++) { const ax = 12 + q * 18 + (k * 40 % 18); const ay = y0 + LANE_H / 2; ctx.beginPath(); ctx.moveTo(ax + 12, ay - 16); ctx.lineTo(ax, ay); ctx.lineTo(ax + 12, ay + 16); ctx.lineTo(ax + 20, ay + 16); ctx.lineTo(ax + 8, ay); ctx.lineTo(ax + 20, ay - 16); ctx.fill(); }
+        ctx.fillStyle = '#e43b44'; ctx.fillRect(0, y0, VW, 4); ctx.fillRect(0, y0 + LANE_H - 4, VW, 4);
+      } else {
+        ctx.fillStyle = '#e43b44'; ctx.fillRect(0, y0, VW, LANE_H);
+        ctx.fillStyle = '#ff6a3d'; ctx.fillRect(0, y0 + 8, VW, LANE_H - 16);
+        ctx.fillStyle = '#feae34'; ctx.fillRect(0, y0 + 24, VW, LANE_H - 48);
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, y0 + LANE_H / 2 - 8, VW, 16);
+        ctx.fillStyle = '#fff'; for (let q = 0; q < 12; q++) ctx.fillRect(((q * 52 + tt * 900) % (VW + 40)) - 20, y0 + 12 + ((q * 37) % (LANE_H - 28)), 16, 4);
+      }
+    }
+    for (const c of F.cores) {
+      const pu = 1 + Math.sin(c.t * 9) * 0.15;
+      for (let q = 1; q <= 4; q++) { ctx.globalAlpha = 0.28 / q; ctx.fillStyle = '#6fe3ff'; ctx.fillRect(Math.round((c.x + q * 14) / 4) * 4 - 6, Math.round(c.y / 4) * 4 - 6, 12, 12); }
+      ctx.globalAlpha = 0.35; ctx.fillStyle = '#6fe3ff'; ctx.beginPath(); ctx.arc(c.x, c.y, 30 * pu, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = '#0b5a8a'; ctx.beginPath(); ctx.arc(c.x, c.y, 17 * pu, 0, 7); ctx.fill();
+      ctx.fillStyle = '#6fe3ff'; ctx.beginPath(); ctx.arc(c.x, c.y, 13 * pu, 0, 7); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(c.x / 4) * 4 - 8, Math.round(c.y / 4) * 4 - 8, 8, 8);
+    }
+    // the boss: a big pixel sprite that charges, fires and flinches
+    const slide = Math.max(0, 1.2 - F.age) * 160, bx = VW - 72 + slide, by = VH / 2 + Math.sin(tt * 1.2) * VH * 0.2;
+    const charging = F.beams.some(m3 => m3.t <= m3.warn), firing = F.beams.some(m3 => m3.t > m3.warn);
+    drawBoss(F.gi, bx, by, tt, charging, firing, F.hitT > 0);
+    // boss health: one block per hit left
+    const bw = 22, bn = gd.hits, bx0 = Math.round((VW - bn * (bw + 4)) / 2);
+    ctx.fillStyle = '#181425'; ctx.fillRect(bx0 - 6, 118, bn * (bw + 4) + 8, 26);
+    for (let q = 0; q < bn; q++) { ctx.fillStyle = q < F.hp ? (F.hitT > 0 && q === F.hp - 1 ? '#fff' : '#e43b44') : '#3a4466'; ctx.fillRect(bx0 + q * (bw + 4), 124, bw, 14); }
+    text(gd.name.toUpperCase(), VW / 2, 108, 12, '#feae34');
+    if (F.age < 5) text('FLY INTO THE BLUE ORBS', VW / 2, 154, 11, '#b8e8ff');
   }
 }
 
@@ -1457,9 +1603,9 @@ function drawUpdates() {
     panel(P.x + 10, P.y + 10, 88, 26, { fill: PXC.ink, hi: PXC.ink }); text('V1.0 BASE', P.x + 54, P.y + 23, 11, PXC.white);
     panel(P.x + P.w - 74, P.y + 10, 64, 26, { fill: PXC.ink, hi: PXC.ink }); text(`V${V.v}`, P.x + P.w - 42, P.y + 23, 11, PXC.yellow);
   }
-  const cw = 52, gap = 6, x0 = (W - (6 * cw + 5 * gap)) / 2;
+  const cw = 46, gap = 4, x0 = (W - (7 * cw + 6 * gap)) / 2;
   for (let i = 1; i <= LATEST; i++) {
-    const cx = x0 + ((i - 1) % 6) * (cw + gap), cy = i <= 6 ? 372 : 404, sel = i === pv;
+    const cx = x0 + ((i - 1) % 7) * (cw + gap), cy = i <= 7 ? 372 : 404, sel = i === pv;
     btn(VERS[i - 1].v, cx, cy, cw, 28, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 12 });
   }
   panel(20, 438, 360, 142);
