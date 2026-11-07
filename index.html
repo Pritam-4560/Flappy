@@ -59,8 +59,8 @@ const VERS = [
     notes: ['Auto-pause on leave, 3-2-1 to resume', 'Pixel UI kit: panels, buttons, icons', 'End screen counts up, stats, confetti', 'NEW BEST banner and boss warning siren', 'Tap anywhere on the end screen to retry'] },
   { v: '1.9', name: 'Living World', sum: 'Five hand-built, animated pixel worlds.', visual: 'Detailed animated pixel scenes',
     notes: ['Hand-built scenes for all five zones', 'Flickering windows, smoke, sparks, rain', 'Lightning storms and a northern aurora', 'UFO, airship and rocket fly past', 'Hidden easter eggs: can you spot them?'] },
-  { v: '1.10', name: 'Pipe Dreams', sum: 'Pipes that finally do something.', visual: 'Springs, jaws, splits, gravity',
-    notes: ['Spring pipes: land on the coil to bounce', 'Jaw pipes pinch shut as you arrive', 'Split pipes: safe low, rich high road', 'Gravity gates flip the world upside down', 'New pipes arrive zone by zone'] },
+  { v: '1.10', name: 'Pipe Dreams', sum: 'Pipes that finally do something.', visual: 'Moving pipes, holes, springs, jaws',
+    notes: ['Sliding pipes that sway side to side', 'Cheese pipes with three holes to pick', 'Shutter pipes whose gap jumps', 'Springs, jaws, splits and gravity gates', 'Slalom runs. New pipes arrive zone by zone'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -225,9 +225,13 @@ function addPipe() {
   const sp = ZSP[z] * grng(0.94, 1.06);
   const t = run.lastSp / ZSPD[z], d = clamp(170 * t, 70, 260);
   const lo = 70 + base / 2, hi = H - 70 - base / 2;
-  const gy = clamp(grng(run.lastGy - d, run.lastGy + d * 1.25), lo, hi);
+  let gy = clamp(grng(run.lastGy - d, run.lastGy + d * 1.25), lo, hi), slal = false;
+  if (FX().pipes) {                                                          // a slalom: gaps alternate high and low in a steady rhythm
+    if (!run.slalom && run.genCount > 8 && z >= 1 && seedRand() < 0.07) run.slalom = { n: 4, side: seedRand() < 0.5 ? -1 : 1 };
+    if (run.slalom) { gy = clamp(H / 2 + run.slalom.side * 85, lo, hi); run.slalom.side *= -1; slal = true; if (--run.slalom.n <= 0) run.slalom = null; }
+  }
   run.lastGy = gy; run.lastSp = sp;
-  const p = { x: run.genX, w: 58, gy, base, amp: z >= 1 ? grng(0, z >= 3 ? 70 : 50) : 0, ph: grng(0, 6.28), spd: grng(0.9, 1.7), z, passed: false, minEdge: 99, cy: gy, gap: base };
+  const p = { x: run.genX, w: 58, gy, base, amp: slal ? 0 : z >= 1 ? grng(0, z >= 3 ? 70 : 50) : 0, ph: grng(0, 6.28), spd: grng(0.9, 1.7), z, passed: false, minEdge: 99, cy: gy, gap: base };
   run.pipes.push(p);
   let bubbleHere = false;
   if (FX().cards && m >= run.nextBubble) {
@@ -237,19 +241,24 @@ function addPipe() {
     run.nextBubble += !FX().flow ? 500 : run.nextBubble < 320 ? 200 : 400;
   }
   const midX = run.genX + sp * 0.5, roll = seedRand(), gc = run.genCount++;
-  // pipe variety, introduced zone by zone: spring | pinch (jaw) | split
-  const kr = seedRand(); p.kind = 'normal';
-  if (FX().pipes && gc > 3 && !bubbleHere) {
-    const tbl = [[0.16, 0, 0], [0.10, 0.24, 0], [0.08, 0.18, 0.24], [0.06, 0.2, 0.22], [0.08, 0.18, 0.24]][z]; let acc = 0;
-    for (const [i, k] of ['spring', 'pinch', 'split'].entries()) { acc += tbl[i]; if (kr < acc) { p.kind = k; break; } }
+  // pipe variety, introduced zone by zone
+  const kr = seedRand(); p.kind = 'normal'; p.slal = slal;
+  if (FX().pipes && gc > 3 && !bubbleHere && !slal) {
+    const tbl = [[0.20, 0.12, 0, 0, 0, 0], [0.20, 0.08, 0.18, 0.12, 0, 0], [0.16, 0.06, 0.14, 0.14, 0.14, 0], [0.14, 0.04, 0.12, 0.14, 0.12, 0.14], [0.14, 0.06, 0.12, 0.12, 0.12, 0.14]][z]; let acc = 0;
+    for (const [i, k] of ['slider', 'spring', 'pinch', 'split', 'cheese', 'shutter'].entries()) { acc += tbl[i]; if (kr < acc) { p.kind = k; break; } }
   }
+  const midC = (v, half) => clamp(v, H / 2 - half, H / 2 + half);
+  if (p.kind === 'slider') { p.amp = grng(80, 130); p.spd = grng(1.1, 1.8); p.sway = seedRand() < 0.4; }       // a moving gap (amp * speed stays reachable)
   if (p.kind === 'split') {
-    p.amp = 0; p.gy = clamp(p.gy, 256, 384); p.cy = p.gy; run.lastGy = p.gy;
+    p.amp = 0; p.gy = midC(p.gy, 64); p.cy = p.gy; run.lastGy = p.gy;
     const g1 = base * 0.78, c1 = p.gy - 56 - g1 / 2;                       // the high road carries the coins
     run.scraps.push({ x: p.x + 14, y: c1, r: 8, v: 3, risky: true }); run.scraps.push({ x: p.x + 44, y: c1, r: 8, v: 3, risky: true });
   }
+  if (p.kind === 'cheese' || p.kind === 'shutter') { p.amp = 0; p.gy = midC(p.gy, 49); p.cy = p.gy; run.lastGy = p.gy; }
+  if (p.kind === 'cheese') { const gg = base * 0.62; [-150, 150].forEach(o => run.scraps.push({ x: p.x + 29, y: p.gy + o, r: 8, v: 3, risky: true })); }
+  if (p.kind === 'shutter') p.ph = grng(0, 3.3);
   if (p.kind === 'spring') p.amp = Math.min(p.amp, 30);
-  if (FX().pipes && z >= 3 && gc > 6 && run.genX - run.lastGateX > 900 && seedRand() < 0.24) { run.gates.push({ x: midX, hit: false }); run.lastGateX = run.genX; }
+  if (FX().pipes && z >= 3 && gc > 6 && run.genX - run.lastGateX > 900 && seedRand() < 0.22) { run.gates.push({ x: midX, hit: false }); run.lastGateX = run.genX; }
   if (roll < 0.34) { if (FX().drones) run.drones.push({ x: midX, y0: grng(130, H - 130), amp: grng(20, 70), ph: grng(0, 6.28), spd: grng(1.2, 2.2), dead: false, y: H / 2 }); }
   else if (roll < 0.56 && z >= 2) run.gears.push({ x: midX, y0: grng(170, H - 170), amp: grng(60, 130), ph: grng(0, 6.28), spd: grng(1.4, 2.4), a: 0, y: H / 2 });
   else if (roll < 0.62) { if (FX().pads) run.pads.push({ x: midX, y: grng(150, H - 150), got: false }); }
@@ -459,7 +468,10 @@ function update(dt) {
     else if (!save.seen.bubble && run.bubbles.some(d => !d.got && onScreen(d))) run.hint = 'GRAB THE ? FOR AN UPGRADE';
     else if (FX().pipes) {
       const pk = k => run.pipes.some(q => q.kind === k && !q.passed && onScreen(q));
-      if (!save.seen.spring && pk('spring')) run.hint = 'LAND ON THE SPRING TO BOUNCE!';
+      if (!save.seen.slider && pk('slider')) run.hint = 'MOVING PIPE - WATCH THE ARROWS';
+      else if (!save.seen.spring && pk('spring')) run.hint = 'LAND ON THE SPRING TO BOUNCE!';
+      else if (!save.seen.cheese && pk('cheese')) run.hint = 'THREE HOLES - PICK ONE';
+      else if (!save.seen.shutter && pk('shutter')) run.hint = 'SHUTTER - WATCH THE FLASH';
       else if (!save.seen.pinch && pk('pinch')) run.hint = 'JAWS PINCH SHUT - STAY CENTERED';
       else if (!save.seen.split && pk('split')) run.hint = 'HIGH ROAD = BONUS COINS';
       else if (!save.seen.gate && run.gates.some(g => !g.hit && onScreen(g))) run.hint = 'GRAVITY GATE - FLY THE OTHER WAY';
@@ -470,9 +482,12 @@ function update(dt) {
   for (const p of run.pipes) {
     const pk = p.kind || 'normal';
     p.gap = p.base + gapBonus();
-    const sx = p.x - run.dist;
+    p.ox = pk === 'slider' && p.sway ? Math.sin(run.t * 1.4 + p.ph) * 30 : 0;
+    const sx = p.x - run.dist + p.ox;
+    if (pk === 'shutter' && (sx - BX > 130 || p.slot === undefined)) { const ph = (run.t + p.ph) % 3.3; p.slot = Math.floor(ph / 1.1); p.warn = (ph % 1.1) > 0.7; }   // the gap hops; it locks 130 px before you arrive
+    else if (pk === 'shutter') p.warn = false;
     if (pk === 'pinch') { p.pinch = clamp((170 - (sx - BX)) / 110, 0, 1); p.gap *= 1 - 0.38 * p.pinch; }
-    p.cy = pk === 'split' ? clamp(p.gy, 256, 384) : clamp(p.gy + p.amp * Math.sin(p.ph + run.t * p.spd), 66 + p.gap / 2, H - 66 - p.gap / 2);
+    p.cy = pk === 'split' ? clamp(p.gy, H / 2 - 64, H / 2 + 64) : (pk === 'cheese' || pk === 'shutter') ? clamp(p.gy, H / 2 - 49, H / 2 + 49) : clamp(p.gy + p.amp * Math.sin(p.ph + run.t * p.spd), 66 + p.gap / 2, H - 66 - p.gap / 2);
     const gaps = gapsOf(p);
     if (BX + r > sx && BX - r < sx + p.w) {
       let inside = false, edge = 99, gi2 = 0;
@@ -493,6 +508,9 @@ function update(dt) {
       if (pk === 'split' && p.lastGi === 0) { addScrap(3, BX + 30, b.y - 40); float('HIGH ROAD!', BX + 30, b.y - 58, '#fee761'); addFever(8); }
       if (pk === 'split' && !save.seen.split) { save.seen.split = true; persist(); }
       if (pk === 'pinch' && !save.seen.pinch) { save.seen.pinch = true; persist(); }
+      if (pk === 'slider' && !save.seen.slider) { save.seen.slider = true; persist(); }
+      if (pk === 'cheese' && !save.seen.cheese) { save.seen.cheese = true; persist(); }
+      if (pk === 'shutter' && !save.seen.shutter) { save.seen.shutter = true; persist(); }
       if (FX().scrap && FX().flow) {
         run.streak++; if (run.streak > run.bestStreak) run.bestStreak = run.streak;
         if (Math.abs(b.y - (ng[0] + ng[1]) / 2) < (ng[1] - ng[0]) * 0.16) { addScrap(1, BX + 30, b.y - 30); float('PERFECT', BX + 30, b.y - 48, '#fee761'); addFever(6); }
@@ -805,6 +823,8 @@ function drawDrone(d, x) {
   ctx.strokeStyle = '#6a7394'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-8, 8); ctx.lineTo(-11, 13); ctx.moveTo(8, 8); ctx.lineTo(11, 13); ctx.stroke(); ctx.restore();
 }
 function gapsOf(p) {
+  if (p.kind === 'cheese') { const g = p.gap * 0.62; return [-150, 0, 150].map(o => [p.cy + o - g / 2, p.cy + o + g / 2]); }
+  if (p.kind === 'shutter') { const c = p.cy + ((p.slot === undefined ? 1 : p.slot) - 1) * 110; return [[c - p.gap / 2, c + p.gap / 2]]; }
   if (p.kind === 'split') { const g1 = p.gap * 0.78, g2 = p.gap * 0.95, c1 = p.cy - 56 - g1 / 2, c2 = p.cy + 56 + g2 / 2; return [[c1 - g1 / 2, c1 + g1 / 2], [c2 - g2 / 2, c2 + g2 / 2]]; }
   return [[p.cy - p.gap / 2, p.cy + p.gap / 2]];
 }
@@ -817,6 +837,13 @@ function drawPipeSet(x, p, Z, gaps, floorY, tt) {
   });
   pipeBar(x, y0, floorY, w, Z, false);
   const [t0, b0] = gaps[0];
+  if (p.kind === 'slider') {                                    // arrows on the pipe say which way the gap is heading
+    const dirn = Math.cos(tt * (p.spd || 1.4) + (p.ph || 0)) >= 0 ? 1 : -1; ctx.fillStyle = '#ffffff';
+    [[t0 - 36, 1], [b0 + 22, 1]].forEach(([ay]) => { if (dirn > 0) { ctx.fillRect(x + w / 2 - 2, ay + 12, 4, 4); ctx.fillRect(x + w / 2 - 6, ay + 8, 12, 4); ctx.fillRect(x + w / 2 - 10, ay + 4, 20, 4); } else { ctx.fillRect(x + w / 2 - 10, ay + 8, 20, 4); ctx.fillRect(x + w / 2 - 6, ay + 12, 12, 4); ctx.fillRect(x + w / 2 - 2, ay + 16, 4, 4); } });
+  }
+  if (p.kind === 'shutter' && p.warn && Math.floor(tt * 8) % 2 === 0) {   // the next hop, flashing red
+    const nx = gapsOf({ ...p, slot: ((p.slot || 0) + 1) % 3 })[0]; ctx.fillStyle = '#e43b44'; ctx.fillRect(x - 4, nx[0] - 4, w + 8, 4); ctx.fillRect(x - 4, nx[1], w + 8, 4);
+  }
   if (p.kind === 'pinch') {                                     // jaws: a plain cap with teeth that turn red as they close in
     const hot = (p.pinch || 0) > 0.15, tc = hot ? '#e43b44' : '#ffffff';
     ctx.fillStyle = Z.lo; ctx.fillRect(x - 4, t0 - 16, w + 8, 16); ctx.fillRect(x - 4, b0, w + 8, 16);
@@ -1012,7 +1039,7 @@ function drawWorld() {
     const gx = gd.alt * PPM - d; if (gx > -30 && gx < W + 30 && !(run.fight && run.fight.gi === GUARDS.indexOf(gd))) { ctx.fillStyle = 'rgba(255,106,61,.25)'; ctx.fillRect(gx - 3, 0, 6, H); text(gd.name.toUpperCase() + ' ' + gd.alt + ' m', gx + 8, 130, 11, '#ff9a6d', 'left'); }
   }
   for (const p of run.pipes) {
-    const x = p.x - d; if (x < -80 || x > W + 80) continue;
+    const x = p.x - d + (p.ox || 0); if (x < -80 || x > W + 80) continue;
     drawPipeSet(x, p, ZONES[p.z], gapsOf(p), H, run.t);
   }
   for (const g of run.gates) {                                  // gravity gate: a column of pink arrows pointing where gravity will go
@@ -1225,10 +1252,13 @@ function drawMini(v, t, x, y, w, h, sc) {
   for (let i = 0; i < 5; i++) {
     const px = (((i * 190 - t * sp) % 950) + 950) % 950 - 120, cy = sh / 2 + Math.sin(i * 2.1) * sh * 0.14;
     if (f.junk) {
-      const kind = f.pipes ? ['normal', 'spring', 'pinch', 'split', 'normal'][i % 5] : 'normal', pp = { w: 58, kind, sprung: false, pinch: 1 };
+      const kind = f.pipes ? ['slider', 'spring', 'pinch', 'cheese', 'split', 'shutter'][i % 6] : 'normal', pp = { w: 58, kind, sprung: false, pinch: 1, spd: 1.4, ph: i, warn: Math.floor(t * 2) % 2 === 0, slot: Math.floor(t) % 3 }, cc = sh * 0.5;
       let gs = [[cy - gap / 2, cy + gap / 2]];
+      if (kind === 'slider') { const yy = cc + Math.sin(t * 1.6 + i) * 40; gs = [[yy - gap / 2, yy + gap / 2]]; pp.spd = 1.6; pp.ph = i; }
       if (kind === 'pinch') gs = [[cy - gap * 0.35, cy + gap * 0.35]];
-      if (kind === 'split') { const g1 = gap * 0.78, g2 = gap * 0.95, cc = sh * 0.5, c1 = cc - 56 - g1 / 2, c2 = cc + 56 + g2 / 2; gs = [[c1 - g1 / 2, c1 + g1 / 2], [c2 - g2 / 2, c2 + g2 / 2]]; }
+      if (kind === 'split') { const g1 = gap * 0.78, g2 = gap * 0.95, c1 = cc - 56 - g1 / 2, c2 = cc + 56 + g2 / 2; gs = [[c1 - g1 / 2, c1 + g1 / 2], [c2 - g2 / 2, c2 + g2 / 2]]; }
+      if (kind === 'cheese') { const g = gap * 0.62; gs = [-80, 0, 80].map(o => [cc + o - g / 2, cc + o + g / 2]); }
+      if (kind === 'shutter') { const c = cc + (pp.slot - 1) * 60; gs = [[c - gap / 2, c + gap / 2]]; pp.cy = cc; pp.gap = gap; }
       drawPipeSet(px, pp, ZONES[z], gs, top, t);
     }
     else { classicPipe(px, 0, cy - gap / 2, 58, true); classicPipe(px, cy + gap / 2, top, 58, false); }
