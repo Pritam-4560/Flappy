@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Flapocalypse</title>
 <style>
-  html,body{margin:0;height:100%;background:#0b0f1a;overflow:hidden;touch-action:none;user-select:none}
+  html,body{margin:0;height:100%;background:#0b0f1a;overflow:hidden;touch-action:none;user-select:none;overscroll-behavior:none;-webkit-user-select:none}
   body{display:flex;align-items:center;justify-content:center}
-  canvas{height:100vh;max-width:100vw;aspect-ratio:400/640;background:#141b2e;image-rendering:pixelated}
+  canvas{height:100vh;height:100dvh;max-width:100vw;aspect-ratio:400/640;background:#141b2e;image-rendering:pixelated;-webkit-tap-highlight-color:transparent}
 </style>
 </head>
 <body>
@@ -37,7 +37,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -55,6 +55,8 @@ const VERS = [
     notes: ['Streaks: clean pipes boost your scrap', 'Perfect passes, stomp chains, risky coins', 'Coin sounds climb, fever leaves a trail', 'Slow-motion deaths, easy start, hints', 'First upgrade bubble at 120 m, not 500 m'] },
   { v: '1.7', name: 'Health', sum: 'One hit no longer ends the run.', visual: 'Hearts, red flash, low-HP pulse',
     notes: ['3 hearts: a hit costs a heart, not the run', 'Shields still soak a hit before hearts', 'Heart pickups, streak and guardian heals', 'Repair Kit and Armor Plate cards', 'Last heart: red pulse and a heartbeat'] },
+  { v: '1.8', name: 'Polish', sum: 'The details that make it feel finished.', visual: 'Fades, count-ups, confetti',
+    notes: ['Auto-pause on leave, 3-2-1 to resume', 'Buttons press down, screens fade', 'End screen counts up, stats, confetti', 'NEW BEST banner and boss warning siren', 'Tap anywhere on the end screen to retry'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -113,6 +115,7 @@ const hashStr = t => { let h = 2166136261; for (const ch of t) h = Math.imul(h ^
 // ---------- State ----------
 let state = 'title';            // title | updates | menu | play | pick | dead | victory
 let run, buttons = [], cards = [], parts = [], floaters = [];
+let paused = false, resumeT = 0, fadeA = 0, pressFx = null;
 let last = 0, shake = 0, deadAt = 0, copied = 0, zoneToast = { t: 0, txt: '' }, flash = { c: '#fff', a: 0 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const tl = id => (!FX().workshop || dailyMode && state !== 'menu' && state !== 'dead' && state !== 'victory') ? 0 : (save.tier[id] || 0);
@@ -156,6 +159,8 @@ const SFX = {
   hurt:  () => { tone(240, 60, 0.28, 'sawtooth', 0.12); noise(0.16, 0.1); },
   heal:  () => [0, 1, 2].forEach(i => tone(520 * Math.pow(1.26, i), 520 * Math.pow(1.26, i), 0.12, 'triangle', 0.07, i * 0.07)),
   beat:  () => tone(90, 55, 0.14, 'sine', 0.1),
+  warn:  () => [0, 1, 2, 3].forEach(i => tone(i % 2 ? 420 : 620, i % 2 ? 420 : 620, 0.16, 'square', 0.06, i * 0.18)),
+  tick:  () => tone(700, 700, 0.06, 'square', 0.05),
 };
 let musT = 0, musStep = 0;
 function music(dt) {
@@ -196,6 +201,7 @@ function newRun() {
   genPipes();
 }
 function startRun(daily, startAlt) {
+  fadeA = 0.7; paused = false; resumeT = 0;
   dailyMode = daily === true;
   const seed = hashStr('flapocalypse-' + todayStr());
   seedRand = dailyMode ? mulberry(seed) : Math.random;
@@ -238,7 +244,7 @@ function addPipe() {
 
 // ---------- Actions ----------
 function flap() {
-  if (state !== 'play' || run.dying) return;
+  if (state !== 'play' || run.dying || paused || resumeT > 0) return;
   const b = run.bird;
   run.started = true; b.vy = -flapV(); run.lastFlap = run.t; SFX.flap();
   for (let i = 0; i < 4; i++) parts.push({ x: BX - 8, y: b.y + 6, vx: rng(-70, -20), vy: rng(10, 70), l: .35, c: '#e8eefc' });
@@ -324,13 +330,13 @@ function choose(i) {
 const LANE_H = H / 5;
 function startFight() {
   const g = GUARDS[run.gi];
-  run.fight = { gi: run.gi, hp: g.hits, step: 0, timer: 1.4, beams: [], cores: [], coreAt: 0, coreLane: 0 };
+  run.fight = { age: 0, gi: run.gi, hp: g.hits, step: 0, timer: 1.4, beams: [], cores: [], coreAt: 0, coreLane: 0 };
   run.pipes = []; run.drones = []; run.gears = []; run.pads = []; run.scraps = []; run.bolts = []; run.bubbles = []; run.hearts = [];
-  float(g.name.toUpperCase(), W / 2, 200, '#ff6a3d'); shake = 8; flash = { c: '#ff6a3d', a: .3 };
+  if (!FX().polish) float(g.name.toUpperCase(), W / 2, 200, '#ff6a3d'); shake = 8; flash = { c: '#ff6a3d', a: .3 }; if (FX().polish) SFX.warn();
 }
 function updateFight(dt) {
   const F = run.fight, g = GUARDS[F.gi], b = run.bird, r = hitR();
-  F.timer -= dt;
+  F.age += dt; F.timer -= dt;
   if (F.timer <= 0) {
     const lanes = g.pat[F.step % g.pat.length]; F.step++;
     for (const l of lanes) F.beams.push({ lane: l, t: 0, warn: 0.95, fire: 0.4 });
@@ -420,6 +426,7 @@ function update(dt) {
   const m = mOf(); if (m > run.maxM) run.maxM = m;
   const nz = zoneOf(run.maxM);
   if (nz > run.zone) { run.zone = nz; zoneToast = { t: 2.6, txt: ZONES[nz].n }; SFX.zone(); }
+  if (FX().polish && save.best > 20 && !run.bestShown && run.maxM > save.best) { run.bestShown = true; float('NEW BEST!', W / 2, 180, '#fee761'); SFX.milestone(); shake = 4; flash = { c: '#fee761', a: .25 }; }
   if (FX().flow && Math.floor(run.maxM / 100) > run.lastHundred) { run.lastHundred = Math.floor(run.maxM / 100); float(run.lastHundred * 100 + ' M', W / 2, 200, '#c0cbdc'); SFX.milestone(); }
   run.hint = '';
   if (FX().flow) {
@@ -455,7 +462,7 @@ function update(dt) {
     const dx = BX - (d.x - run.dist), dy = b.y - d.y;
     if (Math.abs(dx) < 22 && Math.abs(dy) < 22) {
       if (b.vy > 40 && dy < -2) {
-        const fl = FX().flow; d.dead = true; b.vy = -600 * (1 + 0.25 * cl('spring')); if (fl) { run.chain++; run.chainT = 1.8; run.freeze = 0.06; } addFever(10); addScrap(fl ? 2 * run.chain : 2, BX + 20, d.y); shake = fl ? 5 : 4; SFX.stomp(fl ? run.chain - 1 : 0);
+        run.stomps = (run.stomps || 0) + 1; const fl = FX().flow; d.dead = true; b.vy = -600 * (1 + 0.25 * cl('spring')); if (fl) { run.chain++; run.chainT = 1.8; run.freeze = 0.06; } addFever(10); addScrap(fl ? 2 * run.chain : 2, BX + 20, d.y); shake = fl ? 5 : 4; SFX.stomp(fl ? run.chain - 1 : 0);
         float(fl && run.chain > 1 ? 'STOMP x' + run.chain + '!' : 'STOMP!', BX + 30, d.y - 14, '#6fe3ff'); if (!save.seen.drone) { save.seen.drone = true; persist(); }
         for (let i = 0; i < 10; i++) parts.push({ x: BX, y: d.y, vx: rng(-120, 120), vy: rng(-160, 40), l: .45, c: '#9aa6c8' });
       } else hurt('a junk drone');
@@ -611,8 +618,10 @@ function text(t, x, y, size = 16, c = '#fff', align = 'center', bold = true) {
 }
 function btn(label, x, y, w, h, onClick, o = {}) {
   buttons.push({ x, y, w, h, onClick });
-  rr(x, y, w, h, 10); ctx.fillStyle = o.disabled ? '#2a3350' : (o.color || '#3c6df0'); ctx.fill();
-  text(label, x + w / 2, y + h / 2, o.size || 18, o.disabled ? '#7b86a8' : '#fff');
+  const pr = pressFx && pressFx.x === x && pressFx.y === y && performance.now() - pressFx.t < 160, oy = pr ? 3 : 0;
+  rr(x, y + oy, w, h, 10); ctx.fillStyle = o.disabled ? '#2a3350' : (o.color || '#3c6df0'); ctx.fill();
+  if (pixText && !o.disabled) { ctx.fillStyle = pr ? 'rgba(255,255,255,.18)' : 'rgba(0,0,0,.25)'; if (pr) { rr(x, y + oy, w, h, 10); ctx.fill(); } else ctx.fillRect(x + 4, y + h - 4, w - 8, 4); }
+  text(label, x + w / 2, y + h / 2 + oy, o.size || 18, o.disabled ? '#7b86a8' : '#fff');
 }
 const fmt = n => Math.floor(n).toLocaleString('en-US');
 
@@ -799,6 +808,7 @@ function drawHUD() {
   if (FX().health) for (let i = 0; i < run.maxHp; i++) drawHeartPx(14 + i * 26, 56, 3, i < run.hp ? '#e43b44' : '#3a4466', i < run.hp ? '#f6757a' : null);
   if (run.shields) text('🛡 ' + run.shields, 14, 64 + yo, 15, '#6fe3ff', 'left');
   if (run.streak >= 3) text('STREAK ' + run.streak + (run.streak >= 5 ? '  +' + Math.min(60, run.streak * 4) + '%' : ''), 14, 86 + yo, 12, '#fee761', 'left');
+  if (FX().polish && run.fight && run.fight.age < 1.6 && ((run.fight.age * 6) | 0) % 2 === 0) { ctx.fillStyle = 'rgba(228,59,68,.45)'; ctx.fillRect(0, H / 2 - 44, W, 88); text('WARNING', W / 2, H / 2 - 12, 34, '#fff'); text(GUARDS[run.fight.gi].name.toUpperCase(), W / 2, H / 2 + 26, 16, '#fee761'); }
   if (run.afterBoost > 0 && ((run.t * 4) | 0) % 2 === 0) text('INVINCIBLE - FIND YOUR RHYTHM', W / 2, 126, 13, '#6fe3ff');
   else if (run.hint && ((run.t * 3) | 0) % 2 === 0) text(run.hint, W / 2, 126, 14, '#fee761');
   if (FX().fever) {
@@ -848,11 +858,14 @@ function shareRun() {
 }
 function drawEnd() {
   ctx.fillStyle = 'rgba(5,8,16,.8)'; ctx.fillRect(0, 0, W, H);
-  const v = run.victory, G = FX().guardians;
+  const v = run.victory, G = FX().guardians, PO = !!FX().polish;
+  const kk = PO ? Math.min(1, (performance.now() - deadAt) / 1000) : 1, ez = 1 - Math.pow(1 - kk, 3);      // numbers count up
+  if (PO && run.newBest) { const tt = performance.now() / 1000; for (let i = 0; i < 44; i++) { ctx.fillStyle = ['#fee761', '#e43b44', '#2ce8f5', '#63c74d', '#f6757a'][i % 5]; ctx.fillRect(Math.round(((i * 53) % W + Math.sin(tt * 2 + i) * 16) / 4) * 4, Math.round((((tt * 70 + i * 37) % (H + 30)) - 10) / 4) * 4, 8, 8); } }
   text(v ? 'YOU MADE IT!' : 'RUN OVER', W / 2, 72, 34, v ? '#ffd24a' : '#ff6a3d');
   text(`${dailyMode ? 'Daily #' + dayNumber() + ' · ' : ''}${v ? 'you beat all 3 guardians' : 'ended by ' + run.killer}`, W / 2, 104, 13, '#b8c4ea', 'center', false);
-  text(`${fmt(run.maxM)} m`, W / 2, 148, 42, '#fff');
+  text(`${fmt(run.maxM * ez)} m`, W / 2, 148, 42, '#fff');
   text(run.newBest ? 'NEW BEST!' : `best ${fmt(save.best)} m`, W / 2, 182, 14, run.newBest ? '#6fe3ff' : '#9aa6c8');
+  if (PO) text(`PIPES ${run.passed}   BEST STREAK ${run.bestStreak}   STOMPS ${run.stomps || 0}`, W / 2, 252, 11, '#8b9bb4', 'center', false);
   if (G) {
     ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(40, 204, W - 80, 12, 6); ctx.fill();
     ctx.fillStyle = '#ffd24a'; rr(40, 204, Math.max(8, (W - 80) * clamp(run.maxM / SUMMIT, 0, 1)), 12, 6); ctx.fill();
@@ -860,8 +873,8 @@ function drawEnd() {
     const ng = GUARDS.find(gd => gd.alt > run.maxM);
     text(v ? 'The whole map, in one run.' : (ng ? `${fmt(ng.alt - run.maxM)} m to ${ng.name}` : ''), W / 2, 234, 13, '#ffb199', 'center', false);
   }
-  text(`Scrap: +${run.scrap + run.payout}  (${run.scrap} collected + ${run.payout} distance bonus)`, W / 2, 268, 14, '#ffd24a');
-  text(`Total scrap: ${fmt(save.scrap)}`, W / 2, 290, 13, '#ffd24a', 'center', false);
+  text(`Scrap: +${Math.floor((run.scrap + run.payout) * ez)}  (${run.scrap} collected + ${run.payout} distance bonus)`, W / 2, 268, 14, '#ffd24a');
+  text(`Total scrap: ${fmt(save.scrap - (run.scrap + run.payout) * (1 - ez))}`, W / 2, 290, 13, '#ffd24a', 'center', false);
   const goal = nextGoal();
   if (goal) {
     const f = Math.min(1, save.scrap / goal.cost);
@@ -1016,7 +1029,7 @@ function drawMini(v, t, x, y, w, h, sc) {
   else drawRivet(110, by, rot, wing, feverOn, false, 1);
   if (f.health) { const lost = ((t * 0.7) | 0) % 2; for (let i = 0; i < 3; i++) drawHeartPx(236 + i * 26, 48, 3, i < 3 - lost ? '#e43b44' : '#3a4466', i < 3 - lost ? '#f6757a' : null); }
   if (f.flow) { text('STREAK ' + (4 + Math.floor(t * 1.3) % 9), 236, 28, 14, '#fee761', 'left'); if (((t * 2) | 0) % 2) text('PERFECT', 118, by - 40, 12, '#fee761'); for (let q = 0; q < 8; q++) { ctx.fillStyle = ['#f6757a', '#feae34', '#fee761', '#2ce8f5'][q % 4]; ctx.fillRect(100 - q * 10, by + Math.sin(t * 9 + q) * 6, 8, 8); } }
-  if (feverOn) { ctx.fillStyle = 'rgba(255,79,216,.14)'; ctx.fillRect(0, 0, W, sh); text('FEVER x2', 200, 40, 20, '#ff9be8'); }
+  if (feverOn) { ctx.fillStyle = 'rgba(255,79,216,.14)'; ctx.fillRect(0, 0, W, sh); text('FEVER x2', 290, 90, 16, '#ff9be8'); }
   ctx.restore();
 }
 
@@ -1056,7 +1069,7 @@ function drawUpdates() {
   }
   ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 2; rr(P.x, P.y, P.w, P.h, 4); ctx.stroke();
   // version chips
-  const cw = 42, gap = 5, x0 = (W - (LATEST * cw + (LATEST - 1) * gap)) / 2;
+  const cw = 38, gap = 4, x0 = (W - (LATEST * cw + (LATEST - 1) * gap)) / 2;
   for (let i = 1; i <= LATEST; i++) {
     const cx = x0 + (i - 1) * (cw + gap), sel = i === pv;
     btn(VERS[i - 1].v, cx, 382, cw, 32, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 14 });
@@ -1071,7 +1084,7 @@ function drawUpdates() {
   btn(pv === ver ? `PLAY v${V.v}` : `PLAY v${V.v} INSTEAD`, 120, 584, 260, 44, () => { selectVer(pv); startRun(false); }, { size: 17, color: '#e0753a' });
 }
 
-function render() {
+function renderInner() {
   buttons = []; deferred = []; inWorld = false;
   if (state === 'title' || state === 'updates' || state === 'menu') {
     pixText = true; ctx.save(); ctx.imageSmoothingEnabled = false;
@@ -1102,17 +1115,37 @@ function render() {
   ctx.restore();
 }
 
+function render() {
+  renderInner();
+  if (state === 'play' && (paused || resumeT > 0)) {
+    pixText = true; ctx.fillStyle = 'rgba(8,10,20,.72)'; ctx.fillRect(0, 0, W, H);
+    if (paused) { text('PAUSED', W / 2, H / 2 - 20, 44, '#fff'); text('TAP TO RESUME', W / 2, H / 2 + 36, 16, '#fee761'); }
+    else text(String(Math.max(1, Math.ceil(resumeT / 0.55))), W / 2, H / 2, 80, '#fee761');
+  }
+  if (fadeA > 0) { ctx.fillStyle = `rgba(8,10,20,${fadeA})`; ctx.fillRect(0, 0, W, H); }
+}
+function pauseNow() { if (state === 'play' && run && run.started && !run.dying && !paused && resumeT <= 0) { paused = true; if (AC) { try { AC.suspend(); } catch (e) {} } } }
+function resumeNow() { if (!paused) return; paused = false; resumeT = 1.65; if (AC) { try { AC.resume(); } catch (e) {} } }
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseNow(); });
+addEventListener('blur', pauseNow);
+
 // ---------- Loop & input (one button: tap anywhere / space) ----------
 function frame(ts) {
   const dt = Math.min(0.033, (ts - last) / 1000 || 0); last = ts;
-  update(dt); render(); requestAnimationFrame(frame);
+  if (fadeA > 0) fadeA = Math.max(0, fadeA - dt * 3.2);
+  if (resumeT > 0 && !paused) { const was = Math.ceil(resumeT / 0.55); resumeT -= dt; if (Math.ceil(Math.max(0, resumeT) / 0.55) !== was) SFX.tick(); }
+  else if (!paused) update(dt);
+  render(); requestAnimationFrame(frame);
 }
 function toLogical(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; }
 function pointer(e) {
   e.preventDefault(); ac();
+  if (paused) { resumeNow(); return; }
+  if (resumeT > 0) return;
   const [x, y] = toLogical(e);
-  for (const b of buttons) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { SFX.click(); b.onClick(); return; }
+  for (const b of buttons) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { SFX.click(); pressFx = { x: b.x, y: b.y, t: performance.now() }; if (state !== 'play' && state !== 'pick') fadeA = 0.5; b.onClick(); return; }
   if (state === 'updates' && x >= PREV.x && x <= PREV.x + PREV.w && y >= PREV.y && y <= PREV.y + PREV.h) { dragging = true; cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); return; }
+  if ((state === 'dead' || state === 'victory') && FX().polish && performance.now() - deadAt > 700) { startRun(dailyMode); return; }   // tap anywhere to run it back
   flap();
 }
 cv.addEventListener('pointerdown', pointer);
@@ -1120,6 +1153,8 @@ cv.addEventListener('pointermove', e => { if (dragging) { const [x] = toLogical(
 addEventListener('pointerup', () => { dragging = false; });
 addEventListener('keydown', e => {
   const k = e.code; ac();
+  if (k === 'KeyP' || k === 'Escape') { if (state === 'play') { if (paused) resumeNow(); else pauseNow(); return; } }
+  if (paused) { if (k === 'Space' || k === 'ArrowUp') { e.preventDefault(); resumeNow(); } return; }
   if (k === 'KeyM') { muted = !muted; try { localStorage.setItem('fl.mute', muted ? '1' : '0'); } catch (e2) {} return; }
   if (state === 'updates') {
     if (k === 'ArrowLeft') pv = Math.max(1, pv - 1); else if (k === 'ArrowRight') pv = Math.min(LATEST, pv + 1); else if (k === 'Escape') state = 'title';
@@ -1136,7 +1171,7 @@ addEventListener('keydown', e => {
 
 newRun();
 requestAnimationFrame(frame);
-window.__game = { get state() { return state; }, set state(v) { state = v; }, get run() { return run; }, get save() { return save; }, selectVer, VERS, get ver() { return ver; }, startRun, flap, choose, get cards() { return cards; }, SUMMIT, GUARDS, die, hurt };
+window.__game = { get state() { return state; }, set state(v) { state = v; }, get run() { return run; }, get save() { return save; }, selectVer, VERS, get ver() { return ver; }, startRun, flap, choose, get cards() { return cards; }, SUMMIT, GUARDS, die, hurt, get paused() { return paused; }, get resumeT() { return resumeT; } };
 </script>
 </body>
 </html>
