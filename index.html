@@ -37,7 +37,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -57,6 +57,8 @@ const VERS = [
     notes: ['3 hearts: a hit costs a heart, not the run', 'Shields still soak a hit before hearts', 'Heart pickups, streak and guardian heals', 'Repair Kit and Armor Plate cards', 'Last heart: red pulse and a heartbeat'] },
   { v: '1.8', name: 'Polish', sum: 'The details that make it feel finished.', visual: 'Pixel UI, fades, confetti',
     notes: ['Auto-pause on leave, 3-2-1 to resume', 'Pixel UI kit: panels, buttons, icons', 'End screen counts up, stats, confetti', 'NEW BEST banner and boss warning siren', 'Tap anywhere on the end screen to retry'] },
+  { v: '1.9', name: 'Living World', sum: 'Five hand-built, animated pixel worlds.', visual: 'Detailed animated pixel scenes',
+    notes: ['Hand-built scenes for all five zones', 'Flickering windows, smoke, sparks, rain', 'Lightning storms and a northern aurora', 'UFO, airship and rocket fly past', 'Hidden easter eggs: can you spot them?'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -664,7 +666,7 @@ function dimDither(level, col = '#181425', x = 0, y = 0, w = W, h = H) {     // 
   ctx.fillStyle = pat; ctx.fillRect(x, y, w, h);
 }
 function pixBackdrop(z, t) {
-  inWorld = true; skyGrad(ZONES[z], H, false); drawScenery(z, t * 60, t, H, H - 8); ctx.fillStyle = ZONES[z].sil; ctx.fillRect(0, H - 8, W, 8);
+  richScenery = true; inWorld = true; skyGrad(ZONES[z], H, false); drawScenery(z, t * 60, t, H, H - 8); ctx.fillStyle = ZONES[z].sil; ctx.fillRect(0, H - 8, W, 8);
   inWorld = false; pixelate(0, 0, W, H); flushText();
 }
 function muteBtn(x, y) {
@@ -769,7 +771,7 @@ function skyGrad(Z, h, fever) {
   const g = ctx.createLinearGradient(0, 0, 0, h), c = fever ? ['#181425', '#68386c', '#b55088', '#f6757a', '#feae34'] : Z.sky;
   c.forEach((col, i) => g.addColorStop(i / (c.length - 1), col)); ctx.fillStyle = g; ctx.fillRect(0, 0, W, h);
 }
-function skyline(d, speed, floorY, baseH, vary, color, kind, t) {
+function skylineOld(d, speed, floorY, baseH, vary, color, kind, t) {
   const cell = 56, off = d * speed, i0 = Math.floor(off / cell), sx = -(off % cell);
   ctx.fillStyle = color;
   for (let k = -1; k < 9; k++) {
@@ -784,7 +786,7 @@ function skyline(d, speed, floorY, baseH, vary, color, kind, t) {
     else { if (r2 > 0.5) ctx.fillRect(x + 4, floorY - hh - 12, 38, 12); if (r2 > 0.75) ctx.fillRect(x + 22, floorY - hh - 34, 3, 24); }
   }
 }
-function drawScenery(z, d, t, hh, floorY) {
+function drawSceneryOld(z, d, t, hh, floorY) {
   const cx = 290, cy = hh * 0.36;
   const orb = (r, col, a) => { ctx.globalAlpha = a; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.globalAlpha = 1; };
   if (z >= 3) { ctx.fillStyle = '#fee761'; for (let i = 0; i < 26; i++) if (((i * 7 + Math.floor(t * 2)) % 5) !== 0) ctx.fillRect(Math.round(((i * 97 - d * 0.04) % W + W) % W / 4) * 4, Math.round((i * 53) % (hh * 0.55) / 4) * 4, 4, 4); }
@@ -794,15 +796,135 @@ function drawScenery(z, d, t, hh, floorY) {
   if (z === 2) { ctx.globalAlpha = .4; ctx.fillStyle = '#f77622'; ctx.beginPath(); ctx.ellipse(200, floorY + 10, 280, hh * 0.38, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
   const far = [['#733e39', 'city', 70, 70], ['#193c3e', 'stack', 60, 60], ['#3e2731', 'stack', 80, 70], ['#262b44', 'spire', 80, 80], ['#3a4466', 'island', 150, 150]][z];
   const near = [['#3e2731', 'junk', 30, 50], ['#181425', 'city', 36, 50], ['#181425', 'city', 36, 40], ['#181425', 'spire', 36, 50], ['#181425', 'city', 18, 30]][z];
-  skyline(d, 0.1, floorY, far[2], far[3], far[0], far[1], t);
-  skyline(d, 0.25, floorY, near[2], near[3], near[0], near[1], t);
+  skylineOld(d, 0.1, floorY, far[2], far[3], far[0], far[1], t);
+  skylineOld(d, 0.25, floorY, near[2], near[3], near[0], near[1], t);
   if (z === 3) { ctx.fillStyle = '#8b9bb4'; for (let i = 0; i < 24; i++) { const x = Math.round((((i * 47 + t * 60 - d * 0.1) % W) + W) % W / 4) * 4, y = Math.round(((i * 71 + t * 520) % hh) / 4) * 4; ctx.fillRect(x, y, 2, 10); } }
 }
+let richScenery = true;   // update 1.9 and the menus get the detailed scenes; older updates keep the simple backdrop
+// ---------- Pixel scenery: every shape is drawn on the 4 px grid, scrolls in whole pixels and animates in steps ----------
+const SC = { ink: '#181425', n1: '#262b44', n2: '#3a4466', n3: '#5a6988', n4: '#8b9bb4', n5: '#c0cbdc', w: '#ffffff', b1: '#3e2731', b2: '#733e39', b3: '#a22633', red: '#e43b44', or: '#f77622', am: '#feae34', yl: '#fee761',
+  g1: '#193c3e', g2: '#265c42', g3: '#3e8948', g4: '#63c74d', u1: '#124e89', u2: '#0099db', cy: '#2ce8f5', p1: '#68386c', p2: '#b55088', pk: '#f6757a', tn: '#e4a672', sk: '#e8b796', rs: '#be4a2f' };
+const SPR = {
+  cloud: ['...LLL......', '.LLLLLLL.LL.', 'XXXXXXXXXXXX', '..XXXXXXXX..'],
+  big: ['....LLLL.........', '..LLLLLLLL.LLL...', '.LLLLLLLLLLLLLL..', 'XXXXXXXXXXXXXXXXX', '.XXXXXXXXXXXXXXX.'],
+  cat: ['X...X', 'XXXXX', 'XXXXX', '.XXX.'],
+  duck: ['.YY.', 'YYYO', 'YYY.'],
+  ufo: ['....nnn....', '...nCCCn...', '.nnnnnnnnn.', 'nLnLnLnLnLn', '.nnnnnnnnn.'],
+  eye: ['...WWWWWW...', '.WWWWWWWWWW.', 'WWWWIIIIWWWW', 'WWWIIPPIIWWW', 'WWWIIPPIIWWW', 'WWWWIIIIWWWW', '.WWWWWWWWWW.', '...WWWWWW...'],
+  skel: ['..XX..', '.XXXX.', '..XX..', 'XXXXXX', '.X..X.', 'XXXXXX', '.X..X.', '.X..X.'],
+  ship: ['....XXXXXXXXXXXX....', '..XXXXXXXXXXXXXXXXX.', 'XXXXXXXXXXXXXXXXXXXXX', '..XXXXXXXXXXXXXXXXX.', '.....nWnWnWnWn.....', '.....nnnnnnnnn.....'],
+  rocket: ['.W.', 'WRW', 'WWW', 'WWW', 'OWO'],
+};
+function drawScenery(z, d, t, hh, floorY) {
+  if (!richScenery) return drawSceneryOld(z, d, t, hh, floorY);
+  const G = 4, GX = 100, fy = Math.round(floorY / G);
+  const R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x) * G, Math.round(y) * G, w * G, h * G); };
+  const spr = (rows, pal, x, y) => { for (let r = 0; r < rows.length; r++) for (let q = 0; q < rows[r].length; q++) { const k = rows[r][q]; if (k !== '.') R(x + q, y + r, 1, 1, pal[k]); } };
+  const off = sp => Math.floor(d * sp / G);
+  const layer = (sp, slot, fn, drift = 0) => { const o = off(sp) + drift, i0 = Math.floor(o / slot), sx = -(o % slot); for (let k = -1; k <= Math.ceil(GX / slot) + 1; k++) fn(i0 + k, sx + k * slot); };
+  const tick = (per, on = 0.5) => (t % per) / per < on;
+  const disc = (cx, cy, r, col, a = 1) => { ctx.globalAlpha = a; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.globalAlpha = 1; };
+  const gtext = (str, x, y, col) => { [...str.toUpperCase()].forEach((ch, i) => { const rows = glyphRows(3, ch); for (let r = 0; r < 5; r++) for (let q = 0; q < 3; q++) if (rows[r][q] === '1') R(x + i * 4 + q, y + r, 1, 1, col); }); };
+  const sign = (str, x, y, col, bg) => { R(x - 1, y - 1, str.length * 4 + 1, 7, bg); gtext(str, x, y, col); };
+  const puffs = (x, y, n, col, speed = 5, rise = 22) => { for (let k = 0; k < n; k++) { const ph = (t * speed + k * (rise / n)) % rise, sz = 2 + Math.floor(ph / 9); R(x + Math.round(Math.sin(t * 0.8 + k) * 1) + Math.floor(ph / 8), y - ph, sz, sz, col); } };
+  // buildings: windows flicker, roofs carry antennas / water towers
+  const bld = (idx, x0, o) => {
+    const r1 = hsh(idx * 7 + o.seed), r2 = hsh(idx * 13 + o.seed), r3 = hsh(idx * 17 + o.seed), r4 = hsh(idx * 23 + o.seed);
+    const bw = o.minW + Math.floor(r1 * (o.maxW - o.minW)), bh = o.minH + Math.floor(r2 * (o.maxH - o.minH)), bx = Math.round(x0 + r3 * (o.slot - bw)), by = fy - bh;
+    R(bx, by, bw, bh, o.col); R(bx, by, 1, bh, o.edge); R(bx + bw - 1, by, 1, bh, o.shade);
+    if (o.lit) for (let wy = by + 3; wy < fy - 3; wy += 4) for (let wx = bx + 2; wx < bx + bw - 2; wx += 3) {
+      const h = hsh(idx * 101 + wx * 7 + wy * 13 + o.seed), flick = h < 0.05 && Math.floor(t * 1.2 + h * 90) % 3 === 0;
+      if (h < o.lit && !flick) R(wx, wy, 1, 2, h < o.lit * 0.3 ? o.win2 : o.win);
+    }
+    if (o.roof === 'city') {
+      if (r4 > 0.7) { R(bx + (bw >> 1), by - 7, 1, 7, o.col); R(bx + (bw >> 1), by - 8, 1, 1, tick(1.6) ? SC.red : o.col); }
+      else if (r4 > 0.4) { R(bx + 2, by - 4, 1, 4, o.col); R(bx + 5, by - 4, 1, 4, o.col); R(bx + 1, by - 8, 6, 4, o.col); R(bx + 2, by - 9, 4, 1, o.col); }
+      else R(bx + 2, by - 2, 4, 2, o.col);
+    } else if (o.roof === 'factory') {
+      for (let q = 0; q < bw - 2; q += 4) { R(bx + q, by - 2, 2, 2, o.col); R(bx + q + 2, by - 1, 2, 1, o.col); }
+      R(bx + 2, by - 14, 3, 14, o.col); R(bx + 2, by - 14, 3, 1, o.edge); R(bx + bw - 6, by - 9, 3, 9, o.col);
+      puffs(bx + 3, by - 15, 3, o.smoke, 4, 26);
+    } else if (o.roof === 'spire') {
+      const tip = 9 + Math.floor(r4 * 12); for (let k = 0; k < tip; k++) R(bx + (bw >> 1) - Math.max(0, Math.floor((tip - k) / 4)), by - k, 1 + 2 * Math.max(0, Math.floor((tip - k) / 4)), 1, o.col);
+      R(bx + (bw >> 1), by - tip - 2, 1, 2, o.col); R(bx + (bw >> 1), by - tip - 3, 1, 1, tick(1.3 + r4) ? SC.red : SC.w);
+    }
+    return { bx, by, bw, bh, r1, r2, r3, r4 };
+  };
+  const ground = (col) => R(0, fy - 1, GX, 2, col);
+
+  if (z === 0) {                                                      // ---- JUNKYARD AT DUSK ----
+    disc(290, hh * 0.34, 96, SC.pk, .3); disc(290, hh * 0.34, 66, SC.am, .6); disc(290, hh * 0.34, 46, SC.yl);
+    ctx.save(); ctx.beginPath(); ctx.arc(290, hh * 0.34, 46, 0, 7); ctx.clip(); const sy = Math.round(hh * 0.34 / G); [[4, 1], [7, 1], [9, 2], [12, 2]].forEach(([dy, h2]) => R(60, sy + dy, 26, h2, SC.pk)); ctx.restore();
+    layer(0.035, 44, (i, x0) => spr(SPR.cloud, { X: SC.p2, L: SC.pk }, x0 + 4, 12 + Math.floor(hsh(i * 3) * 26)), Math.floor(t * 1.5));
+    const bx0 = (t * 5) % (GX + 40) - 20; for (let k = 0; k < 5; k++) { const fx = bx0 - Math.abs(k - 2) * 3, fyy = 30 + Math.abs(k - 2) * 2 + Math.round(Math.sin(t + k) * 1); spr(Math.floor(t * 3 + k) % 2 ? ['X.X', '.X.'] : ['.X.', 'X.X'], { X: SC.ink }, fx, fyy); }
+    const uf = t % 52; if (uf < 14) { const k = uf / 14; spr(SPR.ufo, { n: SC.n4, C: SC.cy, L: tick(0.5) ? SC.yl : SC.red }, Math.round(-12 + k * (GX + 24)), 16 + Math.round(Math.sin(k * 14) * 2)); }
+    layer(0.08, 20, (i, x0) => { const b = bld(i, x0, { seed: 1, slot: 20, minW: 10, maxW: 15, minH: 16, maxH: 38, col: SC.b2, edge: SC.rs, shade: SC.b1, lit: 0.34, win: SC.am, win2: SC.yl, roof: 'city' }); if (b.r4 < 0.07 && b.bw > 11) sign('SCRAP', b.bx + 1, b.by + 3, tick(2.3, 0.85) ? SC.yl : SC.n4, SC.ink); });
+    layer(0.25, 26, (i, x0) => {
+      const r = hsh(i * 5 + 1), r2 = hsh(i * 11 + 2), r3 = hsh(i * 19 + 3), w = 18 + Math.floor(r * 8), h = 7 + Math.floor(r2 * 8), bx = x0 + 3;
+      for (let k = 0; k < h; k++) { const ww = Math.max(3, w - Math.floor(k * w / h / 1.15)); R(bx + Math.floor((w - ww) / 2), fy - 1 - k, ww, 1, k % 3 === 2 ? SC.b2 : SC.b1); }
+      R(bx + 3, fy - 4, 7, 3, SC.n2); R(bx + 4, fy - 5, 4, 1, SC.n2); R(bx + 5, fy - 4, 2, 1, SC.n4); R(bx + 4, fy - 2, 2, 2, SC.ink); R(bx + 8, fy - 2, 2, 2, SC.ink);
+      if (r3 < 0.1) { const mx = bx + w + 2; R(mx, fy - 36, 1, 36, SC.b1); R(mx - 12, fy - 36, 24, 1, SC.b1); R(mx + 8, fy - 35, 4, 3, SC.b1); const hx = mx - 9 + Math.round(Math.sin(t * 0.9 + i) * 2); R(hx, fy - 35, 1, 12, SC.n2); R(hx - 1, fy - 23, 3, 2, SC.n3); }
+      else if (r3 < 0.17) { const cx = bx + (w >> 1) - 2, cyy = fy - h - 4; spr(SPR.cat, { X: SC.ink }, cx, cyy); if (!(tick(3.4, 0.07))) { R(cx + 1, cyy + 1, 1, 1, SC.yl); R(cx + 3, cyy + 1, 1, 1, SC.yl); } }
+      else if (r3 < 0.22) spr(SPR.duck, { Y: SC.yl, O: SC.or }, bx + (w >> 1), fy - h - 3);
+      else if (r3 < 0.27) { R(bx + 2, fy - h - 9, 1, 9, SC.b1); R(bx + 14, fy - h - 9, 1, 9, SC.b1); sign('HI RIVET', bx + 3, fy - h - 12, SC.yl, SC.n1); }
+    });
+    ground(SC.ink);
+  } else if (z === 1) {                                               // ---- SMOG WORKS ----
+    disc(300, hh * 0.3, 84, SC.g4, .28); disc(300, hh * 0.3, 40, SC.yl, .9);
+    layer(0.04, 46, (i, x0) => spr(SPR.big, { X: SC.g2, L: SC.g3 }, x0 + 2, 10 + Math.floor(hsh(i * 3) * 22)), Math.floor(t * 1.2));
+    layer(0.06, 60, (i, x0) => { const r = hsh(i * 29 + 4); if (r < 0.4) { const ex = x0 + 10, ey = 22, lids = tick(4.6, 0.045); const pup = Math.round(Math.sin(t * 0.5 + i) * 2); spr(SPR.eye, { W: lids ? SC.g2 : SC.n5, I: SC.cy, P: SC.ink }, ex, ey); spr(SPR.eye, { W: '.', I: '.', P: '.' }, ex, ey); if (!lids) { R(ex + 5 + pup, ey + 3, 2, 2, SC.ink); } } else { ctx.save(); ctx.translate((x0 + 20) * G, 44 * G); ctx.rotate(t * 0.35); ctx.fillStyle = SC.g2; for (let q = 0; q < 8; q++) { ctx.rotate(Math.PI / 4); ctx.fillRect(-2 * G, -12 * G, 4 * G, 5 * G); } ctx.beginPath(); ctx.arc(0, 0, 9 * G, 0, 7); ctx.fill(); ctx.fillStyle = SC.g1; ctx.beginPath(); ctx.arc(0, 0, 3 * G, 0, 7); ctx.fill(); ctx.restore(); } });
+    layer(0.1, 22, (i, x0) => bld(i, x0, { seed: 2, slot: 22, minW: 12, maxW: 18, minH: 22, maxH: 44, col: SC.g1, edge: SC.g2, shade: SC.ink, lit: 0.3, win: SC.g4, win2: SC.yl, roof: 'factory', smoke: SC.g3 }));
+    layer(0.25, 30, (i, x0) => {
+      const r = hsh(i * 7 + 9), r2 = hsh(i * 13 + 5); R(x0, fy - 6, 30, 3, SC.ink); R(x0, fy - 7, 30, 1, SC.n2);
+      for (let q = 0; q < 30; q += 6) R(x0 + q + ((Math.floor(t * 4) + i) % 6 === 0 ? 1 : 0), fy - 10, 4, 3, q % 12 ? SC.b2 : SC.am);
+      R(x0 + 4, fy - 14, 3, 8, SC.n2); R(x0 + 3, fy - 15, 5, 2, SC.n3); puffs(x0 + 5, fy - 16, 3, SC.n4, 6, 16);
+      if (r < 0.2) { R(x0 + 18, fy - 20, 2, 14, SC.n3); R(x0 + 14, fy - 21, 8, 2, SC.n3); R(x0 + 14 + Math.round((Math.sin(t * 2 + i) + 1) * 3), fy - 19, 2, 3, SC.red); }
+    });
+    ground(SC.ink);
+  } else if (z === 2) {                                               // ---- RUST PIPES / FURNACE ----
+    for (let gx = 0; gx < GX; gx++) { const hot = ((gx + Math.floor(t * 3)) % 5) < 2; R(gx, fy - 3, 1, 3, hot ? SC.am : SC.or); if (hot) R(gx, fy - 4, 1, 1, SC.yl); }
+    layer(0.08, 24, (i, x0) => { const b = bld(i, x0, { seed: 3, slot: 24, minW: 12, maxW: 18, minH: 18, maxH: 42, col: SC.b1, edge: SC.b2, shade: SC.ink, lit: 0.0, roof: 'factory', smoke: SC.b2 }); for (let q = 0; q < 3; q++) R(b.bx + 3, b.by + 5 + q * 6, b.bw - 6, 1, tick(1.1 + q * 0.3 + b.r4) ? SC.or : SC.b3); });
+    layer(0.2, 28, (i, x0) => {
+      const r = hsh(i * 7 + 11), r2 = hsh(i * 13 + 6);
+      R(x0 + 2, fy - 20, 4, 17, SC.n1); R(x0 + 2, fy - 20, 1, 17, SC.n2); R(x0 + 3, fy - 20 + Math.round((Math.sin(t * 2 + i) + 1) * 4), 2, 8, SC.n3);
+      for (let k = 0; k < 7; k++) R(x0 + 14 + Math.round(Math.sin(t * 1.3 + i + k * 0.3) * (1 + k * 0.2)), fy - 30 + k * 2, 1, 2, SC.n3);
+      R(x0 + 12, fy - 31, 5, 2, SC.n2);
+      if (r < 0.14) spr(SPR.skel, { X: SC.n5 }, x0 + 20, fy - 11 - (Math.floor(t * 2) % 2));
+    });
+    for (let k = 0; k < 16; k++) { const sx = Math.floor(hsh(k * 31) * GX), ph = (t * (7 + (k % 4)) + k * 6) % 44; R(sx + Math.round(Math.sin(t + k) * 2), fy - 4 - ph, 1, 1, ph < 20 ? SC.yl : SC.or); }
+    ground(SC.ink);
+  } else if (z === 3) {                                               // ---- STORM SPIRE ----
+    layer(0.05, 40, (i, x0) => spr(SPR.big, { X: SC.n1, L: SC.n2 }, x0, 6 + Math.floor(hsh(i * 3) * 14)), Math.floor(t * 3));
+    layer(0.08, 26, (i, x0) => { const b = bld(i, x0, { seed: 4, slot: 26, minW: 8, maxW: 12, minH: 26, maxH: 60, col: SC.n1, edge: SC.n2, shade: SC.ink, lit: 0.2, win: SC.cy, win2: SC.w, roof: 'spire' }); if (b.r4 < 0.16) { const a = Math.sin(t * 0.7 + i) * 0.7, bx0 = (b.bx + (b.bw >> 1)) * G, by0 = (b.by - 6) * G; ctx.save(); ctx.fillStyle = SC.yl; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(bx0, by0); ctx.lineTo(bx0 + Math.cos(a - 0.25) * 360, by0 + Math.sin(a - 0.25) * 360); ctx.lineTo(bx0 + Math.cos(a + 0.25) * 360, by0 + Math.sin(a + 0.25) * 360); ctx.fill(); ctx.restore(); R(b.bx + (b.bw >> 1) - 1, b.by - 6, 3, 2, SC.yl); } });
+    layer(0.22, 32, (i, x0) => { const h = 10 + Math.floor(hsh(i * 3 + 1) * 16); for (let k = 0; k < h; k++) R(x0 + 4 + (k < 3 ? 0 : 1), fy - k, 14 - (k < 3 ? 0 : 2), 1, SC.ink); R(x0 + 9, fy - h - 6, 1, 6, SC.ink); R(x0 + 9, fy - h - 7, 1, 1, tick(0.9, 0.4) ? SC.red : SC.ink); });
+    const ls = t % 52; if (ls < 22) { spr(SPR.ship, { X: SC.n3, n: SC.ink, W: tick(0.7) ? SC.yl : SC.n4 }, Math.round(GX + 10 - (ls / 22) * (GX + 40)), 24 + Math.round(Math.sin(ls) * 1)); }
+    ctx.fillStyle = SC.n4; for (let q = 0; q < 26; q++) { const rx = Math.floor((((q * 37 + Math.floor(t * 18) * 2) % GX) + GX) % GX), ry = Math.floor((q * 53 + t * 130) % (hh / G)); R(rx, ry, 1, 3, SC.n4); R(rx - 1, ry + 3, 1, 1, SC.n4); }
+    const L = Math.floor(t / 5.3), lp = t % 5.3; if (lp < 0.42 && hsh(L) < 0.85) { let bx = 18 + Math.floor(hsh(L + 7) * 60), by2 = 0; const seg = Math.floor(lp / 0.07) % 2 ? SC.yl : SC.w; ctx.globalAlpha = 0.18; ctx.fillStyle = SC.w; ctx.fillRect(0, 0, W, hh); ctx.globalAlpha = 1; while (by2 < fy - 10) { R(bx, by2, 1, 3, seg); bx += Math.floor(hsh(L * 31 + by2) * 5) - 2; R(bx, by2 + 3, 1, 1, seg); by2 += 3; } }
+    ground(SC.ink);
+  } else {                                                            // ---- THE SUMMIT ----
+    for (let q = 0; q < 46; q++) { const sx = Math.floor(hsh(q * 17) * GX), sy = Math.floor(hsh(q * 29) * (fy * 0.6)), tw2 = Math.floor(t * 1.5 + q) % 6; R(sx, sy, 1, 1, tw2 === 0 ? SC.w : tw2 < 3 ? SC.n5 : SC.n3); if (tw2 === 0 && q % 5 === 0) { R(sx - 1, sy, 3, 1, SC.n4); R(sx, sy - 1, 1, 3, SC.n4); } }
+    for (let c = 0; c < GX; c++) { const wv = Math.round(Math.sin(c * 0.13 + t * 0.7) * 4 + Math.sin(c * 0.31 - t * 0.5) * 2), top = 16 + wv, len = 12 + Math.round(Math.sin(c * 0.2 + t) * 3); R(c, top, 1, len, c % 2 ? SC.g2 : SC.g1); R(c, top, 1, 2, SC.g4); R(c, top + len - 2, 1, 2, SC.p1); }
+    disc(300, 150, 76, SC.n4, .2); disc(300, 150, 46, SC.n5); R(72, 33, 3, 3, SC.n4); R(78, 40, 4, 4, SC.n4); R(74, 46, 2, 2, SC.n4);
+    { const a = t * 0.6; R(Math.round(300 / G + Math.cos(a) * 18), Math.round(150 / G + Math.sin(a) * 6 - 2), 2, 1, SC.w); R(Math.round(300 / G + Math.cos(a) * 18) - 1, Math.round(150 / G + Math.sin(a) * 6 - 2), 1, 1, SC.cy); }
+    const cs = [[6, 12], [11, 17], [17, 14], [23, 20], [18, 25], [12, 26]]; cs.forEach(([x, y], i) => { R(x, y, 1, 1, SC.yl); const n = cs[(i + 1) % cs.length]; for (let k = 1; k < 4; k++) if (i < 5) R(Math.round(x + (n[0] - x) * k / 4), Math.round(y + (n[1] - y) * k / 4), 1, 1, SC.n3); });
+    const sh = t % 6.5; if (sh < 0.9) { const k = sh / 0.9; for (let q = 0; q < 7; q++) R(Math.round(88 - k * 70 - q), Math.round(6 + k * 24 + q * 0.6), 1, 1, q === 0 ? SC.w : q < 3 ? SC.n5 : SC.n3); }
+    layer(0.06, 44, (i, x0) => {
+      const r = hsh(i * 7 + 13), r2 = hsh(i * 11 + 3), iy = 52 + Math.floor(r * 26), w = 22;
+      R(x0 + 2, iy, w, 3, SC.g3); R(x0 + 2, iy, w, 1, SC.g4); for (let k = 0; k < 8; k++) R(x0 + 2 + k, iy + 3 + k, w - 2 * k, 1, k % 2 ? SC.b1 : SC.b2);
+      if (r2 < 0.5) { R(x0 + 6, iy - 5, 7, 5, SC.tn); R(x0 + 5, iy - 7, 9, 2, SC.b3); R(x0 + 8, iy - 3, 2, 3, SC.b1); R(x0 + 11, iy - 4, 1, 2, tick(3.1, 0.9) ? SC.yl : SC.b1); }
+      else { R(x0 + 12, iy - 9, 1, 9, SC.n5); const f = Math.floor(t * 3) % 4; [[0, -1], [1, 0], [0, 1], [-1, 0]].forEach(([dx, dy], q) => { if ((q + f) % 2 === 0) for (let m = 1; m < 5; m++) R(x0 + 12 + dx * m, iy - 9 + dy * m, 1, 1, SC.n5); }); }
+    }, Math.floor(t * 0.4));
+    const rk = t % 44; if (rk < 8) spr(SPR.rocket, { W: SC.n5, R: SC.red, O: rk % 0.4 < 0.2 ? SC.or : SC.yl }, 76, Math.round(fy - 40 - rk * 7));
+    layer(0.2, 34, (i, x0) => { const hgt = 10 + Math.floor(hsh(i * 3 + 7) * 18); for (let k = 0; k < hgt; k++) { const w = 3 + Math.floor((hgt - k) * 1.1); R(x0 + 16 - (w >> 1), fy - hgt + k, w, 1, k < 4 ? SC.n5 : SC.n1); } if (hsh(i * 3 + 7) > 0.78) { R(x0 + 16, fy - hgt - 7, 1, 7, SC.n4); R(x0 + 17, fy - hgt - 7, 4, 3, tick(1.4, 0.5) ? SC.red : SC.b3); sign('SUMMIT', x0 + 4, fy - hgt - 14, SC.yl, SC.ink); } });
+    ground(SC.ink);
+  }
+}
+
 function drawWorld() {
   if (!FX().junk) { drawClassicWorld(); return; }
   const m = state === 'menu' ? 0 : mOf(), z = zoneOf(m), Z = ZONES[z];
   skyGrad(Z, H, run && run.feverT > 0);
-  drawScenery(z, run.dist, run.t, H, H - 8);
+  richScenery = !!FX().scenery; drawScenery(z, run.dist, run.t, H, H - 8);
   const d = run.dist;
   ctx.fillStyle = Z.sil; ctx.fillRect(0, H - 8, W, 8);
   if (save.best > 0) {
@@ -1014,7 +1136,7 @@ function drawMini(v, t, x, y, w, h, sc) {
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.translate(x, y); ctx.scale(s, s);
   if (!f.junk) classicScene(t * sp, sh);
   else {
-    skyGrad(ZONES[z], sh, feverOn); drawScenery(z, t * sp, t, sh, sh - gh);
+    skyGrad(ZONES[z], sh, feverOn); richScenery = !!f.scenery; drawScenery(z, t * sp, t, sh, sh - gh);
   }
   const gap = 128 + (feverOn ? 26 : 0), top = sh - gh;
   const by = sh / 2 + Math.sin(t * 2.2) * sh * 0.12;
@@ -1211,7 +1333,7 @@ function drawUpdates() {
     panel(P.x + 10, P.y + 10, 88, 26, { fill: PXC.ink, hi: PXC.ink }); text('V1.0 BASE', P.x + 54, P.y + 23, 11, PXC.white);
     panel(P.x + P.w - 74, P.y + 10, 64, 26, { fill: PXC.ink, hi: PXC.ink }); text(`V${V.v}`, P.x + P.w - 42, P.y + 23, 11, PXC.yellow);
   }
-  const cw = 38, gap = 4, x0 = (W - (LATEST * cw + (LATEST - 1) * gap)) / 2;
+  const cw = 34, gap = 4, x0 = (W - (LATEST * cw + (LATEST - 1) * gap)) / 2;
   for (let i = 1; i <= LATEST; i++) {
     const cx = x0 + (i - 1) * (cw + gap), sel = i === pv;
     btn(VERS[i - 1].v, cx, 384, cw, 32, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 12 });
