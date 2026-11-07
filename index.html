@@ -37,7 +37,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -59,6 +59,8 @@ const VERS = [
     notes: ['Auto-pause on leave, 3-2-1 to resume', 'Pixel UI kit: panels, buttons, icons', 'End screen counts up, stats, confetti', 'NEW BEST banner and boss warning siren', 'Tap anywhere on the end screen to retry'] },
   { v: '1.9', name: 'Living World', sum: 'Five hand-built, animated pixel worlds.', visual: 'Detailed animated pixel scenes',
     notes: ['Hand-built scenes for all five zones', 'Flickering windows, smoke, sparks, rain', 'Lightning storms and a northern aurora', 'UFO, airship and rocket fly past', 'Hidden easter eggs: can you spot them?'] },
+  { v: '1.10', name: 'Pipe Dreams', sum: 'Pipes that finally do something.', visual: 'Springs, jaws, splits, gravity',
+    notes: ['Spring pipes: land on the coil to bounce', 'Jaw pipes pinch shut as you arrive', 'Split pipes: safe low, rich high road', 'Gravity gates flip the world upside down', 'New pipes arrive zone by zone'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -163,6 +165,8 @@ const SFX = {
   beat:  () => tone(90, 55, 0.14, 'sine', 0.1),
   warn:  () => [0, 1, 2, 3].forEach(i => tone(i % 2 ? 420 : 620, i % 2 ? 420 : 620, 0.16, 'square', 0.06, i * 0.18)),
   tick:  () => tone(700, 700, 0.06, 'square', 0.05),
+  boing: () => { tone(200, 760, 0.22, 'sine', 0.13); tone(760, 320, 0.2, 'triangle', 0.06, 0.1); },
+  flip:  () => { tone(900, 180, 0.4, 'sawtooth', 0.07); tone(180, 900, 0.3, 'square', 0.05, 0.15); },
 };
 let musT = 0, musStep = 0;
 function music(dt) {
@@ -198,7 +202,7 @@ function newRun() {
     scrap: 0, exact: 0, payout: 0, maxM: sa, passed: 0, startAlt: sa,
     gi: FX().guardians ? GUARDS.findIndex(g => g.alt > sa) : -1, fight: null, nextBubble: !FX().flow ? (Math.floor(sa / 500) + 1) * 500 : sa < 120 ? 120 : sa < 320 ? 320 : (Math.floor((sa - 320) / 400) + 1) * 400 + 320,
     phoenix: false, killer: '', victory: false, zone: zoneOf(sa), lastFlap: -9,
-    hp: FX().health ? 3 : 0, maxHp: FX().health ? 3 : 0, hearts: [], beatT: 0, tiltV: 0, afterBoost: 0, boostEase: 0, streak: 0, bestStreak: 0, chain: 0, chainT: 0, coinCombo: 0, coinT: -9, genCount: 0, freeze: 0, dying: false, dyingT: 0, hint: '', lastHundred: Math.floor(sa / 100), spin: 0,
+    gates: [], gravDir: 1, gravT: 0, lastGateX: -1e9, hp: FX().health ? 3 : 0, maxHp: FX().health ? 3 : 0, hearts: [], beatT: 0, tiltV: 0, afterBoost: 0, boostEase: 0, streak: 0, bestStreak: 0, chain: 0, chainT: 0, coinCombo: 0, coinT: -9, genCount: 0, freeze: 0, dying: false, dyingT: 0, hint: '', lastHundred: Math.floor(sa / 100), spin: 0,
   };
   genPipes();
 }
@@ -225,12 +229,27 @@ function addPipe() {
   run.lastGy = gy; run.lastSp = sp;
   const p = { x: run.genX, w: 58, gy, base, amp: z >= 1 ? grng(0, z >= 3 ? 70 : 50) : 0, ph: grng(0, 6.28), spd: grng(0.9, 1.7), z, passed: false, minEdge: 99, cy: gy, gap: base };
   run.pipes.push(p);
+  let bubbleHere = false;
   if (FX().cards && m >= run.nextBubble) {
+    bubbleHere = true;
     const g0 = run.gi >= 0 && run.gi < GUARDS.length ? GUARDS[run.gi].alt : 1e9;
     if (run.nextBubble < g0 - 40) run.bubbles.push({ x: run.genX + p.w / 2, p, got: false });
     run.nextBubble += !FX().flow ? 500 : run.nextBubble < 320 ? 200 : 400;
   }
   const midX = run.genX + sp * 0.5, roll = seedRand(), gc = run.genCount++;
+  // pipe variety, introduced zone by zone: spring | pinch (jaw) | split
+  const kr = seedRand(); p.kind = 'normal';
+  if (FX().pipes && gc > 3 && !bubbleHere) {
+    const tbl = [[0.16, 0, 0], [0.10, 0.24, 0], [0.08, 0.18, 0.24], [0.06, 0.2, 0.22], [0.08, 0.18, 0.24]][z]; let acc = 0;
+    for (const [i, k] of ['spring', 'pinch', 'split'].entries()) { acc += tbl[i]; if (kr < acc) { p.kind = k; break; } }
+  }
+  if (p.kind === 'split') {
+    p.amp = 0; p.gy = clamp(p.gy, 256, 384); p.cy = p.gy; run.lastGy = p.gy;
+    const g1 = base * 0.78, c1 = p.gy - 56 - g1 / 2;                       // the high road carries the coins
+    run.scraps.push({ x: p.x + 14, y: c1, r: 8, v: 3, risky: true }); run.scraps.push({ x: p.x + 44, y: c1, r: 8, v: 3, risky: true });
+  }
+  if (p.kind === 'spring') p.amp = Math.min(p.amp, 30);
+  if (FX().pipes && z >= 3 && gc > 6 && run.genX - run.lastGateX > 900 && seedRand() < 0.24) { run.gates.push({ x: midX, hit: false }); run.lastGateX = run.genX; }
   if (roll < 0.34) { if (FX().drones) run.drones.push({ x: midX, y0: grng(130, H - 130), amp: grng(20, 70), ph: grng(0, 6.28), spd: grng(1.2, 2.2), dead: false, y: H / 2 }); }
   else if (roll < 0.56 && z >= 2) run.gears.push({ x: midX, y0: grng(170, H - 170), amp: grng(60, 130), ph: grng(0, 6.28), spd: grng(1.4, 2.4), a: 0, y: H / 2 });
   else if (roll < 0.62) { if (FX().pads) run.pads.push({ x: midX, y: grng(150, H - 150), got: false }); }
@@ -248,7 +267,7 @@ function addPipe() {
 function flap() {
   if (state !== 'play' || run.dying || paused || resumeT > 0) return;
   const b = run.bird;
-  run.started = true; b.vy = -flapV(); run.lastFlap = run.t; SFX.flap();
+  run.started = true; b.vy = -flapV() * run.gravDir; run.lastFlap = run.t; SFX.flap();
   for (let i = 0; i < 4; i++) parts.push({ x: BX - 8, y: b.y + 6, vx: rng(-70, -20), vy: rng(10, 70), l: .35, c: '#e8eefc' });
 }
 function float(txt, x, y, c = '#fff') { floaters.push({ txt, x, y, c, l: 1 }); }
@@ -333,7 +352,7 @@ const LANE_H = H / 5;
 function startFight() {
   const g = GUARDS[run.gi];
   run.fight = { age: 0, gi: run.gi, hp: g.hits, step: 0, timer: 1.4, beams: [], cores: [], coreAt: 0, coreLane: 0 };
-  run.pipes = []; run.drones = []; run.gears = []; run.pads = []; run.scraps = []; run.bolts = []; run.bubbles = []; run.hearts = [];
+  run.pipes = []; run.drones = []; run.gears = []; run.pads = []; run.scraps = []; run.bolts = []; run.bubbles = []; run.hearts = []; run.gates = []; run.gravDir = 1; run.gravT = 0;
   if (!FX().polish) float(g.name.toUpperCase(), W / 2, 200, '#ff6a3d'); shake = 8; flash = { c: '#ff6a3d', a: .3 }; if (FX().polish) SFX.warn();
 }
 function updateFight(dt) {
@@ -392,6 +411,7 @@ function update(dt) {
     return;
   }
   if (run.freeze > 0) { run.freeze -= dt; return; }  // tiny hit-stop on big moments
+  const gd = run.gravDir;
   run.t += dt; if (FX().music) music(dt);
   if (FX().flow && run.chain > 0) { run.chainT -= dt; if (run.chainT <= 0) run.chain = 0; }
   if (run.invuln > 0) run.invuln -= dt;
@@ -406,17 +426,18 @@ function update(dt) {
   if (z >= 3 && !F) { run.windT -= dt; if (run.windT <= 0) { run.wind = [-1, 0, 1][(seedRand() * 3) | 0]; run.windT = 3.5; } } else run.wind = 0;
   if (run.boostT > 0) {
     run.boostT -= dt; run.invuln = Math.max(run.invuln, 0.4);
-    const np = run.pipes.find(p => p.x + p.w > run.dist + BX); const target = np ? np.cy : H / 2;
+    const np = run.pipes.find(p => p.x + p.w > run.dist + BX); const gl = np ? gapsOf(np).slice(-1)[0] : null; const target = gl ? (gl[0] + gl[1]) / 2 : H / 2;
     b.y += (target - b.y) * Math.min(1, 5 * dt); b.vy = 0;
     if (run.boostT <= 0) {                                     // boost over: stay invincible while the player finds the rhythm again
       run.boostT = 0; run.invuln = Math.max(run.invuln, 2.4); run.afterBoost = 2.4; run.boostEase = 0.9; b.vy = -160;
       float('FLAP TO TAKE OVER', W / 2, 160, '#fee761');
     }
-  } else { b.vy = Math.min(maxFall(), b.vy + (gravity() + run.wind * 260) * dt); b.y += b.vy * dt; }
+  } else { b.vy = clamp(b.vy + (gravity() * gd + run.wind * 260) * dt, -maxFall(), maxFall()); b.y += b.vy * dt; }
   const flY = FX().junk ? H - 18 : H - 66;
-  if (b.y > flY) { b.y = flY; b.vy = -380; hurt('the floor'); if (state !== 'play') return; }
-  if (b.y < 14) { b.y = 14; b.vy = Math.max(b.vy, 0); }
-  run.tiltV += (b.vy - run.tiltV) * Math.min(1, 12 * dt);
+  if (b.y > flY) { b.y = flY; if (gd > 0) { b.vy = -380; hurt('the floor'); if (state !== 'play') return; } else b.vy = Math.min(b.vy, 0); }
+  if (b.y < 14) { b.y = 14; if (gd < 0) { b.vy = 380; hurt('the ceiling'); if (state !== 'play') return; } else b.vy = Math.max(b.vy, 0); }
+  run.tiltV += (b.vy * gd - run.tiltV) * Math.min(1, 12 * dt);
+  if (run.gravT > 0) { run.gravT -= dt; if (run.gravT <= 0) { run.gravT = 0; run.gravDir = 1; run.invuln = Math.max(run.invuln, 1.0); b.vy = 0; float('GRAVITY BACK', W / 2, 150, '#fee761'); SFX.flip(); flash = { c: '#b55088', a: .3 }; } }
   if (run.afterBoost > 0) { run.afterBoost -= dt; if (run.t * 40 % 2 < 1) parts.push({ x: BX - 14, y: b.y + rng(-6, 6), vx: rng(-140, -60), vy: rng(-20, 20), l: .4, c: ['#6fe3ff', '#fee761', '#ffffff'][(run.t * 30 | 0) % 3] }); }
 
   if (F) { updateFight(dt); return; }
@@ -436,26 +457,55 @@ function update(dt) {
     if (!save.seen.drone && run.drones.some(d => d.tut && !d.dead && onScreen(d))) run.hint = 'FALL ONTO THE DRONE!';
     else if (!save.seen.pad && run.pads.some(d => d.tut && !d.got && onScreen(d))) run.hint = 'FLY INTO THE LAUNCHER!';
     else if (!save.seen.bubble && run.bubbles.some(d => !d.got && onScreen(d))) run.hint = 'GRAB THE ? FOR AN UPGRADE';
+    else if (FX().pipes) {
+      const pk = k => run.pipes.some(q => q.kind === k && !q.passed && onScreen(q));
+      if (!save.seen.spring && pk('spring')) run.hint = 'LAND ON THE SPRING TO BOUNCE!';
+      else if (!save.seen.pinch && pk('pinch')) run.hint = 'JAWS PINCH SHUT - STAY CENTERED';
+      else if (!save.seen.split && pk('split')) run.hint = 'HIGH ROAD = BONUS COINS';
+      else if (!save.seen.gate && run.gates.some(g => !g.hit && onScreen(g))) run.hint = 'GRAVITY GATE - FLY THE OTHER WAY';
+    }
   }
   if (run.gi >= 0 && run.gi < GUARDS.length && run.dist >= GUARDS[run.gi].alt * PPM - 100) { startFight(); return; }
 
   for (const p of run.pipes) {
+    const pk = p.kind || 'normal';
     p.gap = p.base + gapBonus();
-    p.cy = clamp(p.gy + p.amp * Math.sin(p.ph + run.t * p.spd), 66 + p.gap / 2, H - 66 - p.gap / 2);
     const sx = p.x - run.dist;
+    if (pk === 'pinch') { p.pinch = clamp((170 - (sx - BX)) / 110, 0, 1); p.gap *= 1 - 0.38 * p.pinch; }
+    p.cy = pk === 'split' ? clamp(p.gy, 256, 384) : clamp(p.gy + p.amp * Math.sin(p.ph + run.t * p.spd), 66 + p.gap / 2, H - 66 - p.gap / 2);
+    const gaps = gapsOf(p);
     if (BX + r > sx && BX - r < sx + p.w) {
-      const top = p.cy - p.gap / 2, bot = p.cy + p.gap / 2;
-      if (b.y - r < top || b.y + r > bot) hurt('a pipe');
-      else p.minEdge = Math.min(p.minEdge, b.y - r - top, bot - (b.y + r));
+      let inside = false, edge = 99, gi2 = 0;
+      gaps.forEach(([top, bot], i) => { if (b.y - r >= top && b.y + r <= bot) { inside = true; gi2 = i; edge = Math.min(b.y - r - top, bot - (b.y + r)); } });
+      const spBot = gaps[0][1];
+      if (pk === 'spring' && b.y + r > spBot - 28 && b.y < spBot - 1) {          // land on the coil: bounce, no damage
+        if (!p.sprung || run.t - p.sprungT > 0.3) {
+          p.sprung = true; p.sprungT = run.t; b.vy = -640; SFX.boing(); addFever(5); addScrap(1, BX + 30, b.y - 20); shake = 4; float('BOING!', BX + 30, b.y - 30, '#feae34');
+          if (!save.seen.spring) { save.seen.spring = true; persist(); }
+        }
+        b.y = Math.min(b.y, spBot - 28 - r);
+      } else if (!inside) hurt('a pipe');
+      else { p.minEdge = Math.min(p.minEdge, edge); p.lastGi = gi2; }
     }
     if (!p.passed && sx + p.w < BX - r) {
       p.passed = true; run.passed++; SFX.point();
+      const ng = gaps.reduce((best, g2, i) => Math.abs(b.y - (g2[0] + g2[1]) / 2) < Math.abs(b.y - (best[0] + best[1]) / 2) ? g2 : best, gaps[0]);
+      if (pk === 'split' && p.lastGi === 0) { addScrap(3, BX + 30, b.y - 40); float('HIGH ROAD!', BX + 30, b.y - 58, '#fee761'); addFever(8); }
+      if (pk === 'split' && !save.seen.split) { save.seen.split = true; persist(); }
+      if (pk === 'pinch' && !save.seen.pinch) { save.seen.pinch = true; persist(); }
       if (FX().scrap && FX().flow) {
         run.streak++; if (run.streak > run.bestStreak) run.bestStreak = run.streak;
-        if (Math.abs(b.y - p.cy) < p.gap * 0.16) { addScrap(1, BX + 30, b.y - 30); float('PERFECT', BX + 30, b.y - 48, '#fee761'); addFever(6); }
+        if (Math.abs(b.y - (ng[0] + ng[1]) / 2) < (ng[1] - ng[0]) * 0.16) { addScrap(1, BX + 30, b.y - 30); float('PERFECT', BX + 30, b.y - 48, '#fee761'); addFever(6); }
         if (run.streak === 5 || run.streak === 10 || run.streak === 20 || (run.streak > 20 && run.streak % 10 === 0)) { float(run.streak + ' STREAK!', W / 2, 140, '#fee761'); SFX.milestone(); shake = 3; if (run.streak === 10 || run.streak === 25 || run.streak % 50 === 0) heal(1, 'STREAK BONUS'); }
       }
       if (p.minEdge < 10) { addFever(15); float('CLOSE!', BX + 30, b.y - 18, '#ff4fd8'); }
+    }
+  }
+  for (const g of run.gates) {                                              // gravity gate: crossing it flips the world
+    if (!g.hit && g.x - run.dist < BX) {
+      g.hit = true; run.gravDir = -run.gravDir; run.gravT = run.gravDir < 0 ? 7 : 0; run.invuln = Math.max(run.invuln, 1.0); b.vy = 0; shake = 6; SFX.flip(); flash = { c: '#b55088', a: .35 };
+      float(run.gravDir < 0 ? 'GRAVITY FLIP!' : 'GRAVITY BACK', W / 2, 150, '#f6757a');
+      if (!save.seen.gate) { save.seen.gate = true; persist(); }
     }
   }
   for (const d of run.drones) {
@@ -463,8 +513,8 @@ function update(dt) {
     if (d.dead) continue;
     const dx = BX - (d.x - run.dist), dy = b.y - d.y;
     if (Math.abs(dx) < 22 && Math.abs(dy) < 22) {
-      if (b.vy > 40 && dy < -2) {
-        run.stomps = (run.stomps || 0) + 1; const fl = FX().flow; d.dead = true; b.vy = -600 * (1 + 0.25 * cl('spring')); if (fl) { run.chain++; run.chainT = 1.8; run.freeze = 0.06; } addFever(10); addScrap(fl ? 2 * run.chain : 2, BX + 20, d.y); shake = fl ? 5 : 4; SFX.stomp(fl ? run.chain - 1 : 0);
+      if (b.vy * gd > 40 && dy * gd < -2) {
+        run.stomps = (run.stomps || 0) + 1; const fl = FX().flow; d.dead = true; b.vy = -600 * gd * (1 + 0.25 * cl('spring')); if (fl) { run.chain++; run.chainT = 1.8; run.freeze = 0.06; } addFever(10); addScrap(fl ? 2 * run.chain : 2, BX + 20, d.y); shake = fl ? 5 : 4; SFX.stomp(fl ? run.chain - 1 : 0);
         float(fl && run.chain > 1 ? 'STOMP x' + run.chain + '!' : 'STOMP!', BX + 30, d.y - 14, '#6fe3ff'); if (!save.seen.drone) { save.seen.drone = true; persist(); }
         for (let i = 0; i < 10; i++) parts.push({ x: BX, y: d.y, vx: rng(-120, 120), vy: rng(-160, 40), l: .45, c: '#9aa6c8' });
       } else hurt('a junk drone');
@@ -502,7 +552,7 @@ function update(dt) {
   const cut = run.dist - 200;
   run.pipes = run.pipes.filter(o => o.x + o.w > cut); run.drones = run.drones.filter(o => o.x > cut && !o.dead);
   run.gears = run.gears.filter(o => o.x > cut); run.pads = run.pads.filter(o => o.x > cut && !o.got);
-  run.hearts = run.hearts.filter(o => o.x > cut && !o.got); run.scraps = run.scraps.filter(o => o.x > cut && !o.got); run.bubbles = run.bubbles.filter(o => o.x > cut && !o.got);
+  run.hearts = run.hearts.filter(o => o.x > cut && !o.got); run.gates = run.gates.filter(o => o.x > cut); run.scraps = run.scraps.filter(o => o.x > cut && !o.got); run.bubbles = run.bubbles.filter(o => o.x > cut && !o.got);
 }
 
 // ---------- Drawing helpers ----------
@@ -713,13 +763,14 @@ function rivetCell(since, t, row) {
   if (row === 0) return [Math.floor(t * 5) % 4, 1];                              // level glide
   return [4 + Math.floor(t * 6) % 3, row];                                       // wings held out while tilted
 }
-function drawRivetSprite(x, y, col, row, fever, shield, alpha) {
+function drawRivetSprite(x, y, col, row, fever, shield, alpha, flipY) {
   const X = Math.round(x / 4) * 4, Y = Math.round(y / 4) * 4;       // one sprite pixel = one pixel of the 100x160 grid
   ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
   if (fever) { try { ctx.filter = 'hue-rotate(280deg) saturate(1.7) brightness(1.1)'; } catch (e) {} }
-  ctx.drawImage(RIVET, col * 32, row * 32, 32, 32, X - 64, Y - 64, 128, 128);
+  ctx.translate(X, Y); if (flipY) ctx.scale(1, -1);
+  ctx.drawImage(RIVET, col * 32, row * 32, 32, 32, -64, -64, 128, 128);
   ctx.filter = 'none';
-  if (shield) { ctx.globalAlpha = .9; ctx.strokeStyle = '#6fe3ff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(X, Y, 38, 0, 7); ctx.stroke(); }
+  if (shield) { ctx.globalAlpha = .9; ctx.strokeStyle = '#6fe3ff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 38, 0, 7); ctx.stroke(); }
   ctx.restore();
 }
 const HEART = ['.XX.XX.', 'XXXXXXX', 'XXXXXXX', '.XXXXX.', '..XXX..', '...X...'];
@@ -741,7 +792,7 @@ function drawJunkBird() {
   }
   const blink = run.invuln > 0 && ((run.t * 20) | 0) % 2;
   const rot = clamp(b.vy / 700, -.5, .9);
-  if (rivetOk && FX().sprite) { const row = run.dying ? 6 : run.boostT > 0 ? 0 : rivetRowFor(run.tiltV || 0), c = rivetCell(since, run.t, row); drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1); }
+  if (rivetOk && FX().sprite) { const row = run.dying ? 6 : run.boostT > 0 ? 0 : rivetRowFor(run.tiltV || 0), c = rivetCell(since, run.t, row); drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0); }
   else drawRivet(BX, b.y, rot, wing, run.feverT > 0, run.shields > 0, blink ? .4 : 1);
 }
 function drawDrone(d, x) {
@@ -752,6 +803,32 @@ function drawDrone(d, x) {
   ctx.fillStyle = '#7d89ad'; rr(-14, 0, 28, 8, 3); ctx.fill();
   ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(-5, -3, 4.5, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-6, -4, 1.4, 0, 7); ctx.fill();
   ctx.strokeStyle = '#6a7394'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-8, 8); ctx.lineTo(-11, 13); ctx.moveTo(8, 8); ctx.lineTo(11, 13); ctx.stroke(); ctx.restore();
+}
+function gapsOf(p) {
+  if (p.kind === 'split') { const g1 = p.gap * 0.78, g2 = p.gap * 0.95, c1 = p.cy - 56 - g1 / 2, c2 = p.cy + 56 + g2 / 2; return [[c1 - g1 / 2, c1 + g1 / 2], [c2 - g2 / 2, c2 + g2 / 2]]; }
+  return [[p.cy - p.gap / 2, p.cy + p.gap / 2]];
+}
+function drawPipeSet(x, p, Z, gaps, floorY, tt) {
+  const w = p.w; let y0 = 0;
+  gaps.forEach(([top, bot], i) => {
+    if (i === 0) pipeBar(x, 0, top, w, Z, true);
+    else { const mid = (y0 + top) / 2; pipeBar(x, y0, mid, w, Z, false); pipeBar(x, mid, top, w, Z, true); }
+    y0 = bot;
+  });
+  pipeBar(x, y0, floorY, w, Z, false);
+  const [t0, b0] = gaps[0];
+  if (p.kind === 'pinch') {                                     // jaws: a plain cap with teeth that turn red as they close in
+    const hot = (p.pinch || 0) > 0.15, tc = hot ? '#e43b44' : '#ffffff';
+    ctx.fillStyle = Z.lo; ctx.fillRect(x - 4, t0 - 16, w + 8, 16); ctx.fillRect(x - 4, b0, w + 8, 16);
+    ctx.fillStyle = Z.bar; ctx.fillRect(x - 2, t0 - 14, w + 4, 8); ctx.fillRect(x - 2, b0 + 6, w + 4, 8);
+    ctx.fillStyle = tc;
+    for (let k = 0; k < 5; k++) { const tx = x + 4 + k * 11; ctx.fillRect(tx, t0 - 12, 8, 4); ctx.fillRect(tx + 1, t0 - 8, 6, 4); ctx.fillRect(tx + 2, t0 - 4, 4, 4); ctx.fillRect(tx, b0 + 8, 8, 4); ctx.fillRect(tx + 1, b0 + 4, 6, 4); ctx.fillRect(tx + 2, b0, 4, 4); }
+  }
+  if (p.kind === 'spring') {                                    // a coil on the lower lip; it squashes when you land
+    const cx = x + w / 2, ch = p.sprung && tt - p.sprungT < 0.25 ? 8 : 20;
+    for (let k = 0; k < ch / 4; k++) { ctx.fillStyle = k % 2 ? '#e43b44' : '#a22633'; ctx.fillRect(cx - 10 + (k % 2) * 4, b0 - ch + k * 4, 16, 4); }
+    ctx.fillStyle = '#181425'; ctx.fillRect(cx - 16, b0 - ch - 8, 32, 8); ctx.fillStyle = '#feae34'; ctx.fillRect(cx - 14, b0 - ch - 6, 28, 4); ctx.fillStyle = '#fee761'; ctx.fillRect(cx - 14, b0 - ch - 6, 28, 2);
+  }
 }
 function pipeBar(x, y0, y1, w, Z, capBottom) {
   const h = y1 - y0; if (h <= 0) return;
@@ -936,8 +1013,13 @@ function drawWorld() {
   }
   for (const p of run.pipes) {
     const x = p.x - d; if (x < -80 || x > W + 80) continue;
-    pipeBar(x, 0, p.cy - p.gap / 2, p.w, ZONES[p.z], true);
-    pipeBar(x, p.cy + p.gap / 2, H, p.w, ZONES[p.z], false);
+    drawPipeSet(x, p, ZONES[p.z], gapsOf(p), H, run.t);
+  }
+  for (const g of run.gates) {                                  // gravity gate: a column of pink arrows pointing where gravity will go
+    const gx = Math.round((g.x - d) / 4) * 4; if (gx < -30 || gx > W + 30) continue;
+    dimDither(2, '#b55088', gx - 16, 0, 32, H); ctx.fillStyle = '#f6757a'; ctx.fillRect(gx - 18, 0, 4, H); ctx.fillRect(gx + 14, 0, 4, H);
+    const up = run.gravDir > 0; ctx.fillStyle = '#ffffff';
+    for (let yy = Math.floor(run.t * 50 % 64) - 64; yy < H; yy += 64) { const ay = up ? H - yy - 24 : yy; if (up) { ctx.fillRect(gx - 2, ay, 4, 4); ctx.fillRect(gx - 6, ay + 4, 12, 4); ctx.fillRect(gx - 10, ay + 8, 20, 4); ctx.fillRect(gx - 2, ay + 12, 4, 8); } else { ctx.fillRect(gx - 2, ay, 4, 8); ctx.fillRect(gx - 10, ay + 8, 20, 4); ctx.fillRect(gx - 6, ay + 12, 12, 4); ctx.fillRect(gx - 2, ay + 16, 4, 4); } }
   }
   for (const h of run.hearts) { const x = h.x - d; if (x < -40 || x > W + 40) continue; drawHeartPx(Math.round((x - 14) / 4) * 4, Math.round((h.y - 12 + Math.sin(run.t * 4) * 3) / 4) * 4, 4, '#e43b44', '#f6757a'); }
   for (const s of run.scraps) { const x = s.x - d; if (x < -20 || x > W + 20) continue; ctx.fillStyle = s.v > 1 ? '#6fe3ff' : '#ffd24a'; ctx.beginPath(); ctx.arc(x, s.y, s.r, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(x, s.y, s.r * .45, 0, 7); ctx.fill(); }
@@ -1142,7 +1224,13 @@ function drawMini(v, t, x, y, w, h, sc) {
   const by = sh / 2 + Math.sin(t * 2.2) * sh * 0.12;
   for (let i = 0; i < 5; i++) {
     const px = (((i * 190 - t * sp) % 950) + 950) % 950 - 120, cy = sh / 2 + Math.sin(i * 2.1) * sh * 0.14;
-    if (f.junk) { pipeBar(px, 0, cy - gap / 2, 58, ZONES[z], true); pipeBar(px, cy + gap / 2, top, 58, ZONES[z], false); }
+    if (f.junk) {
+      const kind = f.pipes ? ['normal', 'spring', 'pinch', 'split', 'normal'][i % 5] : 'normal', pp = { w: 58, kind, sprung: false, pinch: 1 };
+      let gs = [[cy - gap / 2, cy + gap / 2]];
+      if (kind === 'pinch') gs = [[cy - gap * 0.35, cy + gap * 0.35]];
+      if (kind === 'split') { const g1 = gap * 0.78, g2 = gap * 0.95, cc = sh * 0.5, c1 = cc - 56 - g1 / 2, c2 = cc + 56 + g2 / 2; gs = [[c1 - g1 / 2, c1 + g1 / 2], [c2 - g2 / 2, c2 + g2 / 2]]; }
+      drawPipeSet(px, pp, ZONES[z], gs, top, t);
+    }
     else { classicPipe(px, 0, cy - gap / 2, 58, true); classicPipe(px, cy + gap / 2, top, 58, false); }
     const ix = px + 124, iy = sh / 2 + Math.sin(i * 3.3 + t) * sh * 0.2, kind = i % 5;
     if (kind === 0 && f.scrap) { ctx.fillStyle = '#ffd24a'; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(ix + k * 22, iy - Math.abs(k - 1) * 8, 8, 0, 7); ctx.fill(); } }
@@ -1197,6 +1285,7 @@ function drawHUD() {
   if (run.shields) text('🛡 ' + run.shields, 14, 64 + yo, 15, PXC.cyan, 'left');
   if (run.streak >= 3) text('STREAK ' + run.streak + (run.streak >= 5 ? '  +' + Math.min(60, run.streak * 4) + '%' : ''), 14, 86 + yo, 12, PXC.yellow, 'left');
   if (FX().polish && run.fight && run.fight.age < 1.6 && ((run.fight.age * 6) | 0) % 2 === 0) { ctx.fillStyle = PXC.ink; ctx.fillRect(0, H / 2 - 48, W, 96); ctx.fillStyle = '#a22633'; ctx.fillRect(0, H / 2 - 44, W, 88); text('WARNING', W / 2, H / 2 - 12, 34, PXC.white); text(GUARDS[run.fight.gi].name.toUpperCase(), W / 2, H / 2 + 26, 16, PXC.yellow); }
+  if (run.gravDir < 0 && (run.gravT > 1.5 || ((run.t * 6) | 0) % 2 === 0)) text('GRAVITY FLIPPED  ' + Math.ceil(run.gravT) + 'S', W / 2, 146, 13, PXC.pink);
   if (run.afterBoost > 0 && ((run.t * 4) | 0) % 2 === 0) text('INVINCIBLE - FIND YOUR RHYTHM', W / 2, 126, 13, PXC.cyan);
   else if (run.hint && ((run.t * 3) | 0) % 2 === 0) text(run.hint, W / 2, 126, 14, PXC.yellow);
   if (FX().fever) {
@@ -1333,7 +1422,7 @@ function drawUpdates() {
     panel(P.x + 10, P.y + 10, 88, 26, { fill: PXC.ink, hi: PXC.ink }); text('V1.0 BASE', P.x + 54, P.y + 23, 11, PXC.white);
     panel(P.x + P.w - 74, P.y + 10, 64, 26, { fill: PXC.ink, hi: PXC.ink }); text(`V${V.v}`, P.x + P.w - 42, P.y + 23, 11, PXC.yellow);
   }
-  const cw = 34, gap = 4, x0 = (W - (LATEST * cw + (LATEST - 1) * gap)) / 2;
+  const cw = 32, gap = 2, x0 = (W - (LATEST * cw + (LATEST - 1) * gap)) / 2;
   for (let i = 1; i <= LATEST; i++) {
     const cx = x0 + (i - 1) * (cw + gap), sel = i === pv;
     btn(VERS[i - 1].v, cx, 384, cw, 32, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 12 });
