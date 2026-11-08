@@ -30,6 +30,24 @@ const ZONES = [
   { n: 'The Storm Spire', to: 2500, sky: ['#181425', '#262b44', '#124e89', '#0099db', '#2ce8f5'], bar: '#5a6988', hi: '#c0cbdc', lo: '#262b44', sil: '#181425' },
   { n: 'The Summit',      to: 3000, sky: ['#181425', '#181425', '#262b44', '#3a4466', '#68386c'], bar: '#d77643', hi: '#fee761', lo: '#733e39', sil: '#181425' },
 ];
+const PIPEZ = [
+  { bar: '#3e8948', hi: '#63c74d', lo: '#193c3e' }, { bar: '#68386c', hi: '#b55088', lo: '#181425' }, { bar: '#124e89', hi: '#0099db', lo: '#181425' },
+  { bar: '#be4a2f', hi: '#feae34', lo: '#3e2731' }, { bar: '#8b9bb4', hi: '#ffffff', lo: '#3a4466' }];
+const GROUNDZ = [['#e4a672', '#be4a2f', '#733e39', '#3e2731', '#d77643'], ['#63c74d', '#3e8948', '#265c42', '#193c3e', '#a8c84a'], ['#f77622', '#be4a2f', '#733e39', '#3e2731', '#a22633'], ['#c0cbdc', '#5a6988', '#3a4466', '#262b44', '#0099db'], ['#ffffff', '#c0cbdc', '#8b9bb4', '#5a6988', '#2ce8f5']];
+const GROUND_H = 64;
+const groundH = () => FX().feel ? GROUND_H : 8;
+const pipeZ = z => FX().feel ? PIPEZ[z] : ZONES[z];
+function drawGround(z, d, top, vw, vh) {                 // a scrolling pixel ground that moves at full speed, so you feel how fast you go
+  const c = GROUNDZ[z], q = Math.round(top / 4) * 4, off = Math.floor(d / 4) * 4;
+  ctx.fillStyle = c[3]; ctx.fillRect(0, q, vw + 8, vh - q + 8);
+  ctx.fillStyle = '#181425'; ctx.fillRect(0, q, vw + 8, 4);
+  ctx.fillStyle = c[0]; ctx.fillRect(0, q + 4, vw + 8, 4);
+  ctx.fillStyle = c[2]; ctx.fillRect(0, q + 8, vw + 8, 12);
+  ctx.fillStyle = c[1]; const so = off % 24;
+  for (let x = -24 - so; x < vw + 24; x += 24) for (let r = 0; r < 3; r++) ctx.fillRect(x + (2 - r) * 4, q + 8 + r * 4, 12, 4);
+  ctx.fillStyle = '#181425'; ctx.fillRect(0, q + 20, vw + 8, 4);
+  for (let i = 0; i < 26; i++) { const span = vw + 64, xx = ((Math.floor(hsh(i * 13 + 5) * span) - off) % span + span) % span - 32, yy = q + 28 + Math.floor(hsh(i * 7 + 1) * 4) * 4; ctx.fillStyle = i % 3 ? c[2] : c[4]; ctx.fillRect(xx, yy, i % 4 ? 4 : 8, 4); }
+}
 const ZGAP = [190, 176, 162, 150, 138], ZSPD = [150, 165, 185, 205, 225], ZSP = [250, 240, 230, 220, 210];
 const GUARDS = [
   { alt: 500,  name: 'Junk Hawk',        hits: 3, reward: 50,  pat: [[0], [4], [2], [0, 4], [1], [3]] },
@@ -39,7 +57,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -67,6 +85,8 @@ const VERS = [
     notes: ['The camera zooms out 25 percent', 'See pipes and hazards earlier', 'More sky, more skyline, more room to plan', 'Same pixel art, finer pixel grid', 'Moving pipes are easier to read'] },
   { v: '1.12', name: 'Rivet Reacts', sum: 'Rivet has feelings now, and shows them.', visual: 'Faces, hops, hearts, stars',
     notes: ['Happy hops, coin sparkles, cheer backflips', 'Love hearts when healed. Boss redone', 'Ouch: X eyes and spinning stars', 'Boss fear sweat, fist pump on hits', 'Fever grin, boost squint, dizzy flips'] },
+  { v: '1.13', name: 'Feel Good', sum: 'Faster, punchier, easier to read.', visual: 'Ground, pipe score, colours',
+    notes: ['Scrolling pixel ground: feel the speed', 'Big pipe score: ding and pop, +1 scrap', 'Rivet is bigger and on the title', 'Each zone gets its own pipe colour', 'Tighter pipes, journey map up top'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -165,6 +185,7 @@ const SFX = {
   win:   () => [0, 1, 2, 3, 4, 5].forEach(i => tone(523 * Math.pow(1.19, i), 523 * Math.pow(1.19, i), 0.22, 'square', 0.07, i * 0.12)),
   zone:  () => { tone(330, 660, 0.3, 'triangle', 0.07); tone(660, 990, 0.3, 'triangle', 0.05, 0.12); },
   point: () => tone(760, 760, 0.05, 'square', 0.03),
+  ding: () => { tone(988, 988, 0.06, 'square', 0.045); tone(1319, 1319, 0.14, 'square', 0.045, 0.06); },
   click: () => tone(520, 520, 0.04, 'square', 0.04),
   hurt:  () => { tone(240, 60, 0.28, 'sawtooth', 0.12); noise(0.16, 0.1); },
   heal:  () => [0, 1, 2].forEach(i => tone(520 * Math.pow(1.26, i), 520 * Math.pow(1.26, i), 0.12, 'triangle', 0.07, i * 0.07)),
@@ -203,7 +224,7 @@ function newRun() {
   run = {
     t: 0, started: false, bird: { y: VH / 2, vy: 0 }, dist: sa * PPM,
     pipes: [], scraps: [], drones: [], gears: [], pads: [], bubbles: [], bolts: [],
-    genX: sa * PPM + VW + 240, lastGy: VH / 2, lastSp: 250,
+    genX: sa * PPM + (FX().feel ? 330 : VW + 240), lastGy: VH / 2, lastSp: 250,
     cards: {}, shields: (tl('hull') >= 1 ? 1 : 0) + (tl('hull') >= 2 ? 1 : 0),
     invuln: 0, boostT: 0, fever: 0, feverT: 0, wind: 0, windT: 0, boltT: 3,
     scrap: 0, exact: 0, payout: 0, maxM: sa, passed: 0, startAlt: sa,
@@ -229,9 +250,9 @@ function genLimit() { return run.gi >= 0 && run.gi < GUARDS.length ? GUARDS[run.
 function genPipes() { while (run.genX < run.dist + VW + 700 && run.genX < genLimit()) addPipe(); }
 function addPipe() {
   const m = run.genX / PPM, z = zoneOf(m), early = FX().flow ? Math.max(0, 34 - run.genCount * 4) : 0, base = ZGAP[z] + early;
-  const sp = ZSP[z] * grng(0.94, 1.06);
+  const sp = ZSP[z] * grng(0.94, 1.06) * (FX().feel ? 0.86 : 1);
   const t = run.lastSp / ZSPD[z], d = clamp(170 * t, 70, 260);
-  const lo = 70 + base / 2, hi = VH - 70 - base / 2;
+  const lo = 70 + base / 2, hi = VH - 70 - base / 2 - (FX().feel ? 56 : 0);
   let gy = clamp(grng(run.lastGy - d, run.lastGy + d * 1.25), lo, hi), slal = false;
   if (FX().pipes) {                                                          // a slalom: gaps alternate high and low in a steady rhythm
     if (!run.slalom && run.genCount > 8 && z >= 1 && seedRand() < 0.07) run.slalom = { n: 4, side: seedRand() < 0.5 ? -1 : 1 };
@@ -449,7 +470,7 @@ function update(dt) {
       float('FLAP TO TAKE OVER', VW / 2, 160, '#fee761');
     }
   } else { b.vy = clamp(b.vy + (gravity() * gd + run.wind * 260) * dt, -maxFall(), maxFall()); b.y += b.vy * dt; }
-  const flY = FX().junk ? VH - 18 : VH - 66;
+  const flY = FX().junk ? VH - (FX().feel ? GROUND_H + 10 : 18) : VH - 66;
   if (b.y > flY) { b.y = flY; if (gd > 0) { b.vy = -380; hurt('the floor'); if (state !== 'play') return; } else b.vy = Math.min(b.vy, 0); }
   if (b.y < 14) { b.y = 14; if (gd < 0) { b.vy = 380; hurt('the ceiling'); if (state !== 'play') return; } else b.vy = Math.max(b.vy, 0); }
   run.tiltV += (b.vy * gd - run.tiltV) * Math.min(1, 12 * dt);
@@ -510,7 +531,7 @@ function update(dt) {
       else { p.minEdge = Math.min(p.minEdge, edge); p.lastGi = gi2; }
     }
     if (!p.passed && sx + p.w < BX - r) {
-      p.passed = true; run.passed++; SFX.point();
+      p.passed = true; run.passed++; run.passT = run.t; if (FX().feel) { SFX.ding(); addScrap(1, BX + 24, b.y - 34); const gc = gapsOf(p)[0]; for (let i = 0; i < 8; i++) parts.push({ x: sx + p.w / 2, y: (gc[0] + gc[1]) / 2, vx: rng(-120, 120), vy: rng(-120, 120), l: .4, c: i % 2 ? '#fee761' : '#ffffff' }); } else SFX.point();
       const ng = gaps.reduce((best, g2, i) => Math.abs(b.y - (g2[0] + g2[1]) / 2) < Math.abs(b.y - (best[0] + best[1]) / 2) ? g2 : best, gaps[0]);
       if (pk === 'split' && p.lastGi === 0) { addScrap(3, BX + 30, b.y - 40); float('HIGH ROAD!', BX + 30, b.y - 58, '#fee761'); addFever(8); }
       if (pk === 'split' && !save.seen.split) { save.seen.split = true; persist(); }
@@ -898,6 +919,7 @@ function drawJunkBird() {
         case 'worried': ox = Math.sin(t * 40) * 1.5; break;
         case 'wait': oy = Math.sin(t * 3) * 3; rot = Math.sin(t * 1.5) * .08; break;
       }
+      if (FX().feel) { sx *= 1.25; sy *= 1.25; }
       ctx.save(); ctx.translate(BX + ox, b.y + oy); ctx.rotate(rot); ctx.scale(sx, sy); ctx.translate(-BX, -b.y);
       drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0);
       ctx.save(); ctx.translate(Math.round(BX / 4) * 4, Math.round(b.y / 4) * 4); if (run.gravDir < 0) ctx.scale(1, -1); ctx.globalAlpha = blink ? .4 : 1; drawFace(m.type, k, t); ctx.restore();
@@ -953,6 +975,7 @@ function drawPipeSet(x, p, Z, gaps, floorY, tt) {
 }
 function pipeBar(x, y0, y1, w, Z, capBottom) {
   const h = y1 - y0; if (h <= 0) return;
+  if (Z === PIPEZ[0] || PIPEZ.includes(Z)) { ctx.fillStyle = '#181425'; ctx.fillRect(x - 4, y0, w + 8, h); }
   ctx.fillStyle = Z.bar; ctx.fillRect(x, y0, w, h);
   ctx.fillStyle = Z.lo; ctx.fillRect(x, y0, 4, h); ctx.fillRect(x + w - 10, y0, 10, h);
   ctx.fillStyle = Z.hi; ctx.fillRect(x + 8, y0, 8, h);
@@ -1152,7 +1175,7 @@ function drawWorld() {
   if (!FX().junk) { drawClassicWorld(); return; }
   const m = state === 'menu' ? 0 : mOf(), z = zoneOf(m), Z = ZONES[z];
   skyGrad(Z, VH, run && run.feverT > 0);
-  richScenery = !!FX().scenery; drawScenery(z, run.dist, run.t, VH, VH - 8, VW);
+  richScenery = !!FX().scenery; drawScenery(z, run.dist, run.t, VH, VH - groundH(), VW);
   const d = run.dist;
   ctx.fillStyle = Z.sil; ctx.fillRect(0, VH - 8, VW, 8);
   if (save.best > 0) {
@@ -1164,7 +1187,7 @@ function drawWorld() {
   }
   for (const p of run.pipes) {
     const x = p.x - d + (p.ox || 0); if (x < -80 || x > VW + 80) continue;
-    drawPipeSet(x, p, ZONES[p.z], gapsOf(p), VH, run.t);
+    drawPipeSet(x, p, pipeZ(p.z), gapsOf(p), VH, run.t);
   }
   for (const g of run.gates) {                                  // gravity gate: a column of pink arrows pointing where gravity will go
     const gx = Math.round((g.x - d) / 4) * 4; if (gx < -30 || gx > VW + 30) continue;
@@ -1172,6 +1195,7 @@ function drawWorld() {
     const up = run.gravDir > 0; ctx.fillStyle = '#ffffff';
     for (let yy = Math.floor(run.t * 50 % 64) - 64; yy < VH; yy += 64) { const ay = up ? VH - yy - 24 : yy; if (up) { ctx.fillRect(gx - 2, ay, 4, 4); ctx.fillRect(gx - 6, ay + 4, 12, 4); ctx.fillRect(gx - 10, ay + 8, 20, 4); ctx.fillRect(gx - 2, ay + 12, 4, 8); } else { ctx.fillRect(gx - 2, ay, 4, 8); ctx.fillRect(gx - 10, ay + 8, 20, 4); ctx.fillRect(gx - 6, ay + 12, 12, 4); ctx.fillRect(gx - 2, ay + 16, 4, 4); } }
   }
+  if (FX().feel) drawGround(z, run.dist, VH - GROUND_H, VW, VH);
   for (const h of run.hearts) { const x = h.x - d; if (x < -40 || x > VW + 40) continue; drawHeartPx(Math.round((x - 14) / 4) * 4, Math.round((h.y - 12 + Math.sin(run.t * 4) * 3) / 4) * 4, 4, '#e43b44', '#f6757a'); }
   for (const s of run.scraps) { const x = s.x - d; if (x < -20 || x > VW + 20) continue; ctx.fillStyle = s.v > 1 ? '#6fe3ff' : '#ffd24a'; ctx.beginPath(); ctx.arc(x, s.y, s.r, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(x, s.y, s.r * .45, 0, 7); ctx.fill(); }
   for (const bu of run.bubbles) { const x = bu.x - d; if (x < -40 || x > VW + 40) continue; const y = bu.p.cy + Math.sin(run.t * 3) * 4; ctx.fillStyle = 'rgba(160,110,255,.35)'; ctx.beginPath(); ctx.arc(x, y, 20, 0, 7); ctx.fill(); ctx.strokeStyle = '#c9b0ff'; ctx.lineWidth = 2; ctx.stroke(); text('?', x, y, 20, '#fff'); }
@@ -1391,7 +1415,7 @@ function drawClassicEnd() {
 // ---------- Live mini scene of any version (used by the title and the updates screen) ----------
 function drawMini(v, t, x, y, w, h, sc) {
   const f = VERS[v - 1].f, s = (sc || w / 400) * (f.zoom ? 0.8 : 1), sh = h / s, sp = 100;
-  const z = f.zones ? Math.floor(t / 3.5) % 5 : 0, gh = f.junk ? 8 : 52;
+  const z = f.zones ? Math.floor(t / 3.5) % 5 : 0, gh = f.feel ? GROUND_H : f.junk ? 8 : 52;
   const feverOn = !!f.fever && (t % 9) > 5.5;
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.translate(x, y); ctx.scale(s, s);
   if (!f.junk) classicScene(t * sp, sh);
@@ -1410,7 +1434,7 @@ function drawMini(v, t, x, y, w, h, sc) {
       if (kind === 'split') { const g1 = gap * 0.78, g2 = gap * 0.95, c1 = cc - 56 - g1 / 2, c2 = cc + 56 + g2 / 2; gs = [[c1 - g1 / 2, c1 + g1 / 2], [c2 - g2 / 2, c2 + g2 / 2]]; }
       if (kind === 'cheese') { const g = gap * 0.62; gs = [-80, 0, 80].map(o => [cc + o - g / 2, cc + o + g / 2]); }
       if (kind === 'shutter') { const c = cc + (pp.slot - 1) * 60; gs = [[c - gap / 2, c + gap / 2]]; pp.cy = cc; pp.gap = gap; }
-      drawPipeSet(px, pp, ZONES[z], gs, top, t);
+      drawPipeSet(px, pp, f.feel ? PIPEZ[z] : ZONES[z], gs, sh, t);
     }
     else { classicPipe(px, 0, cy - gap / 2, 58, true); classicPipe(px, cy + gap / 2, top, 58, false); }
     const ix = px + 124, iy = sh / 2 + Math.sin(i * 3.3 + t) * sh * 0.2, kind = i % 5;
@@ -1424,9 +1448,10 @@ function drawMini(v, t, x, y, w, h, sc) {
   if (f.guardians && (t % 10) > 6.5) {
     const ph = (t % 10) - 6.5, lh = sh / 5;
     for (const l of [1, 3]) { ctx.fillStyle = ph > 1.4 ? '#ff6a3d' : `rgba(255,80,60,${.15 + .15 * Math.sin(ph * 30)})`; ctx.fillRect(0, l * lh, W, lh); }
-    ctx.fillStyle = '#6a6f90'; ctx.beginPath(); ctx.ellipse(W - 14, sh / 2, 36, 64, 0, 0, 7); ctx.fill(); ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(W - 34, sh / 2 - 12, 7, 0, 7); ctx.fill();
+    drawBoss(Math.floor(t / 10) % 3, W - 60, sh / 2 + Math.sin(t * 1.2) * 40, t, ph <= 1.4, ph > 1.4, false);
   }
   if (!f.junk) classicGround(t * sp, top);
+  else if (f.feel) drawGround(z, t * sp, top, w / s, sh);
   else { ctx.fillStyle = ZONES[z].sil; ctx.fillRect(0, top, W, gh); }
   const wing = Math.sin(t * 16), rot = Math.cos(t * 2.2) * 0.25;
   if (!f.junk) drawClassicBirdAt(110, by, rot, wing);
@@ -1451,28 +1476,42 @@ function para(t, x, y, size, col, maxW, lh) {
 }
 function drawHUD() {
   if (!pixText) return drawHUDOld();
-  if (FX().guardians) {
+  const FE = !!FX().feel;
+  if (FE) {
+    const px0 = 16, pw = W - 32, py = 8, at = x => Math.round((px0 + pw * clamp(x / SUMMIT, 0, 1)) / 2) * 2;
+    ctx.fillStyle = PXC.ink; ctx.fillRect(px0 - 4, py - 4, pw + 8, 16);
+    let a = 0; ZONES.forEach(zz => { const x0 = at(a), x1 = at(zz.to); ctx.fillStyle = zz.sky[2]; ctx.fillRect(x0, py, x1 - x0, 8); ctx.fillStyle = zz.sky[4]; ctx.fillRect(x0, py, Math.max(0, Math.min(x1, at(run.maxM)) - x0), 8); a = zz.to; });
+    for (const gd of GUARDS) { const gx = at(gd.alt); ctx.fillStyle = PXC.ink; ctx.fillRect(gx - 4, py - 4, 8, 16); ctx.fillStyle = save.beaten && save.beaten[GUARDS.indexOf(gd)] ? PXC.green : PXC.red; ctx.fillRect(gx - 2, py - 2, 4, 12); }
+    if (save.best) { ctx.fillStyle = PXC.white; ctx.fillRect(at(save.best) - 1, py - 2, 2, 12); }
+    const rx = at(run.maxM); ctx.fillStyle = PXC.ink; ctx.fillRect(rx - 6, py - 6, 14, 12); ctx.fillStyle = '#a2b2d0'; ctx.fillRect(rx - 4, py - 4, 10, 8); ctx.fillStyle = '#d9531a'; ctx.fillRect(rx - 4, py, 6, 4); ctx.fillStyle = '#feae34'; ctx.fillRect(rx + 6, py - 2, 4, 2); ctx.fillStyle = PXC.ink; ctx.fillRect(rx + 2, py - 2, 2, 2);
+    const pop = Math.max(0, 1 - (run.t - (run.passT ?? -9)) / 0.2), ps = Math.round(44 * (1 + 0.3 * pop));
+    text(String(run.passed), W / 2, 58, ps, pop > 0 ? PXC.yellow : PXC.white);
+    text(fmt(run.maxM) + ' / ' + fmt(SUMMIT) + ' m', 14, 34, 12, PXC.ice, 'left');
+  }
+  else if (FX().guardians) {
     const px0 = 14, pw = W - 28, py = 10;
     ctx.fillStyle = PXC.ink; ctx.fillRect(px0 - 2, py - 2, pw + 4, 10); ctx.fillStyle = PXC.slate; ctx.fillRect(px0, py, pw, 6);
     ctx.fillStyle = PXC.gold; ctx.fillRect(px0, py, Math.max(4, Math.round(pw * clamp(run.maxM / SUMMIT, 0, 1) / 4) * 4), 6);
     for (const gd of GUARDS) { ctx.fillStyle = PXC.red; ctx.fillRect(Math.round((px0 + pw * gd.alt / SUMMIT) / 2) * 2 - 2, py - 4, 4, 14); }
     if (save.best) { ctx.fillStyle = PXC.white; ctx.fillRect(Math.round((px0 + pw * clamp(save.best / SUMMIT, 0, 1)) / 2) * 2 - 1, py - 2, 2, 10); }
   }
-  text(fmt(run.maxM) + ' m', 14, 40, 26, PXC.white, 'left');
+  if (!FE) text(fmt(run.maxM) + ' m', 14, 40, 26, PXC.white, 'left');
   if (FX().scrap) text('⚙ ' + run.scrap, W - 14, 38, 16, PXC.yellow, 'right');
   text('best ' + fmt(save.best) + ' m', W - 14, 58, 12, PXC.ice, 'right');
-  const yo = FX().health ? 22 : 0;
-  if (FX().health) for (let i = 0; i < run.maxHp; i++) drawHeartPx(14 + i * 26, 56, 3, i < run.hp ? '#e43b44' : '#3a4466', i < run.hp ? '#f6757a' : null);
+  const yo = FX().health ? (FE ? 6 : 22) : 0;
+  if (FX().health) for (let i = 0; i < run.maxHp; i++) drawHeartPx(14 + i * 26, FE ? 42 : 56, 3, i < run.hp ? '#e43b44' : '#3a4466', i < run.hp ? '#f6757a' : null);
   if (run.shields) text('🛡 ' + run.shields, 14, 64 + yo, 15, PXC.cyan, 'left');
   if (run.streak >= 3) text('STREAK ' + run.streak + (run.streak >= 5 ? '  +' + Math.min(60, run.streak * 4) + '%' : ''), 14, 86 + yo, 12, PXC.yellow, 'left');
   if (FX().polish && run.fight && run.fight.age < 1.6 && ((run.fight.age * 6) | 0) % 2 === 0) { ctx.fillStyle = PXC.ink; ctx.fillRect(0, H / 2 - 48, W, 96); ctx.fillStyle = '#a22633'; ctx.fillRect(0, H / 2 - 44, W, 88); text('WARNING', W / 2, H / 2 - 12, 34, PXC.white); text(GUARDS[run.fight.gi].name.toUpperCase(), W / 2, H / 2 + 26, 16, PXC.yellow); }
   if (run.gravDir < 0 && (run.gravT > 1.5 || ((run.t * 6) | 0) % 2 === 0)) text('GRAVITY FLIPPED  ' + Math.ceil(run.gravT) + 'S', W / 2, 146, 13, PXC.pink);
   if (run.afterBoost > 0 && ((run.t * 4) | 0) % 2 === 0) text('INVINCIBLE - FIND YOUR RHYTHM', W / 2, 126, 13, PXC.cyan);
-  else if (run.hint && ((run.t * 3) | 0) % 2 === 0) text(run.hint, W / 2, 126, 14, PXC.yellow);
+  else if (run.hint && (FX().feel || ((run.t * 3) | 0) % 2 === 0)) { if (FX().feel) { const hw = tw(run.hint, 14) + 20; ctx.fillStyle = PXC.ink; ctx.fillRect(Math.round((W - hw) / 4) * 4, 112, Math.round(hw / 4) * 4, 28); } text(run.hint, W / 2, 126, 14, ((run.t * 3) | 0) % 2 === 0 ? PXC.yellow : PXC.white); }
   if (FX().fever) {
     const mw = 160, mx = W / 2 - mw / 2, ff = run.feverT > 0 ? run.feverT / feverLen() : run.fever / 100;
+    if (FX().feel) { pixBar(mx + 20, H - 24, mw, 12, ff, run.feverT > 0 ? PXC.pink : PXC.purple); text(run.feverT > 0 ? 'FEVER X2' : 'FEVER', mx + 12, H - 18, 11, run.feverT > 0 ? PXC.pink : PXC.ice, 'right'); }
+    else {
     pixBar(mx, H - 32, mw, 14, ff, run.feverT > 0 ? PXC.pink : PXC.purple);
-    text(run.feverT > 0 ? 'FEVER: WIDE GAPS, X2 SCRAP' : 'FEVER', W / 2, H - 46, 11, PXC.ice);
+    text(run.feverT > 0 ? 'FEVER: WIDE GAPS, X2 SCRAP' : 'FEVER', W / 2, H - 46, 11, PXC.ice); }
   }
   if (run.wind) text(run.wind > 0 ? 'WIND DOWN' : 'WIND UP', W / 2, 90, 13, PXC.cyan);
   if (zoneToast.t > 0) { ctx.globalAlpha = Math.min(1, zoneToast.t); text(zoneToast.txt.toUpperCase(), W / 2, 170, 22, PXC.white); ctx.globalAlpha = 1; }
@@ -1520,7 +1559,7 @@ function drawEnd() {
     text(v ? 'THE WHOLE MAP, IN ONE RUN.' : (ng ? `${fmt(ng.alt - run.maxM)} M TO ${ng.name}` : ''), W / 2, 238, 12, PXC.pink);
   }
   if (PO) text(`PIPES ${run.passed}   BEST STREAK ${run.bestStreak}   STOMPS ${run.stomps || 0}`, W / 2, 254, 11, PXC.mist);
-  text(`⚙ +${Math.floor((run.scrap + run.payout) * ez)}   (${run.scrap} + ${run.payout} BONUS)`, W / 2, 272, 13, PXC.yellow);
+  text(`⚙ +${Math.floor((run.scrap + run.payout) * ez)} SCRAP EARNED`, W / 2, 274, 14, PXC.yellow);
   text(`TOTAL ⚙ ${fmt(save.scrap - (run.scrap + run.payout) * (1 - ez))}`, W / 2, 294, 13, PXC.yellow);
   const goal = nextGoal();
   if (goal) {
@@ -1568,12 +1607,13 @@ function drawMenu() {
   });
   btn('FLAP!', 20, H - 78, 210, 58, () => startRun(false), { color: '#e0753a', size: 26 });
   btn('DAILY', 240, H - 78, 140, 58, () => startRun(true), { color: '#7a4fe0', size: 18 });
-  text(`DAILY #${dayNumber()}: SAME MAP FOR EVERYONE, NO UPGRADES${save.daily && save.daily.date === todayStr() ? ' - BEST ' + fmt(save.daily.best) + ' M' : ''}`, W / 2, H - 9, 11, PXC.ice);
+  text(`DAILY #${dayNumber()}: SAME MAP, NO UPGRADES${save.daily && save.daily.date === todayStr() ? ' - BEST ' + fmt(save.daily.best) + ' M' : ''}`, W / 2, H - 9, 11, PXC.ice);
 }
 function drawTitle() {
   const t = performance.now() / 1000, V = VERS[ver - 1];
   inWorld = true; drawMini(ver, t, 0, 0, W, H); inWorld = false; pixelate(0, 0, W, H); flushText();
   dimDither(1);
+  if (FX().feel && rivetOk) { ctx.save(); ctx.translate(W / 2, 258 + Math.round(Math.sin(t * 2.4) * 2) * 3); ctx.scale(1.5, 1.5); drawRivetSprite(0, 0, Math.floor(t * 12) % 8, 0, false, false, 1); ctx.restore(); }
   pixTextDraw('FLAPOCALYPSE', W / 2, 150, 40, PXC.yellow, 'center', PXC.ink);
   panel(W / 2 - 112, 190, 224, 34);
   text(`V${V.v} · ${V.name}`, W / 2, 207, 14, PXC.yellow);
