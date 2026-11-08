@@ -19,7 +19,7 @@
 // Every death banks scrap. Permanent upgrades let you get further until you can finish it in ONE run.
 const W = 400, H = 640, PPM = 20, SUMMIT = 3000, BX = 110;
 let ZS = 1, VW = W, VH = H;
-const zsOf = f => f.wide ? 0.68 : f.zoom ? 0.8 : 1;
+const zsOf = f => f.zoom ? 0.8 : 1;
 function setView() { ZS = zsOf(FX()); VW = W / ZS; VH = H / ZS; LANE_H = VH / 5; }   // 20 px = 1 m, bird sits at x = 110
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 
@@ -88,8 +88,8 @@ const VERS = [
     notes: ['Happy hops, coin sparkles, cheer backflips', 'Love hearts when healed. Boss redone', 'Ouch: X eyes and spinning stars', 'Boss fear sweat, fist pump on hits', 'Fever grin, boost squint, dizzy flips'] },
   { v: '1.13', name: 'Feel Good', sum: 'Faster, punchier, easier to read.', visual: 'Ground, pipe score, colours',
     notes: ['Scrolling pixel ground: feel the speed', 'Big pipe score: ding and pop, +1 scrap', 'Rivet is bigger and on the title', 'Each zone gets its own pipe colour', 'Tighter pipes, journey map up top'] },
-  { v: '1.14', name: 'Fair Share', sum: 'Wider view, fairer coins and upgrades.', visual: 'Coin trails, wide view',
-    notes: ['Camera pulled back even further', 'Coins come in trails along your path', 'Coins are bigger and spin', 'An upgrade bubble every 250 m', 'A bit faster to match the view'] },
+  { v: '1.14', name: 'Fair Share', sum: 'Room to breathe, fairer coins.', visual: 'Roomy pipes, coin trails',
+    notes: ['Much more room between pipes', 'Coins come in trails along your path', 'Coins are bigger and spin', 'An upgrade bubble every 250 m', 'Fair coins: grab them, no freebies'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -249,12 +249,12 @@ function startRun(daily, startAlt) {
 }
 
 // ---------- World generation (ahead of the camera, never depends on the player) ----------
-const speedNow = () => ZSPD[zoneOf(mOf())] * (FX().wide ? 1.1 : 1) * (tl('wing') >= 3 ? 0.94 : 1) * Math.pow(0.92, cl('slow'));
+const speedNow = () => ZSPD[zoneOf(mOf())] * (tl('wing') >= 3 ? 0.94 : 1) * Math.pow(0.92, cl('slow'));
 function genLimit() { return run.gi >= 0 && run.gi < GUARDS.length ? GUARDS[run.gi].alt * PPM - 250 : 1e12; }
 function genPipes() { while (run.genX < run.dist + VW + 700 && run.genX < genLimit()) addPipe(); }
 function addPipe() {
   const m = run.genX / PPM, z = zoneOf(m), early = FX().flow ? Math.max(0, 34 - run.genCount * 4) : 0, base = ZGAP[z] + early;
-  const sp = ZSP[z] * grng(0.94, 1.06) * (FX().feel ? 0.86 : 1);
+  const sp = ZSP[z] * grng(0.94, 1.06) * (FX().wide ? 1.3 : FX().feel ? 0.86 : 1);
   const t = run.lastSp / ZSPD[z], d = clamp(170 * t, 70, 260);
   const lo = 70 + base / 2, hi = VH - 70 - base / 2 - (FX().feel ? 56 : 0);
   let gy = clamp(grng(run.lastGy - d, run.lastGy + d * 1.25), lo, hi), slal = false;
@@ -931,7 +931,7 @@ function drawJunkBird() {
         case 'worried': ox = Math.sin(t * 40) * 1.5; break;
         case 'wait': oy = Math.sin(t * 3) * 3; rot = Math.sin(t * 1.5) * .08; break;
       }
-      if (FX().feel) { const bs = FX().wide ? 1.45 : 1.25; sx *= bs; sy *= bs; }
+      if (FX().feel) { const bs = 1.25; sx *= bs; sy *= bs; }
       ctx.save(); ctx.translate(BX + ox, b.y + oy); ctx.rotate(rot); ctx.scale(sx, sy); ctx.translate(-BX, -b.y);
       drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0);
       ctx.save(); ctx.translate(Math.round(BX / 4) * 4, Math.round(b.y / 4) * 4); if (run.gravDir < 0) ctx.scale(1, -1); ctx.globalAlpha = blink ? .4 : 1; drawFace(m.type, k, t); ctx.restore();
