@@ -19,7 +19,8 @@
 // Every death banks scrap. Permanent upgrades let you get further until you can finish it in ONE run.
 const W = 400, H = 640, PPM = 20, SUMMIT = 3000, BX = 110;
 let ZS = 1, VW = W, VH = H;
-function setView() { ZS = FX().zoom ? 0.8 : 1; VW = W / ZS; VH = H / ZS; LANE_H = VH / 5; }   // 20 px = 1 m, bird sits at x = 110
+const zsOf = f => f.wide ? 0.68 : f.zoom ? 0.8 : 1;
+function setView() { ZS = zsOf(FX()); VW = W / ZS; VH = H / ZS; LANE_H = VH / 5; }   // 20 px = 1 m, bird sits at x = 110
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 
 // ---------- Map ----------
@@ -57,7 +58,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -87,6 +88,8 @@ const VERS = [
     notes: ['Happy hops, coin sparkles, cheer backflips', 'Love hearts when healed. Boss redone', 'Ouch: X eyes and spinning stars', 'Boss fear sweat, fist pump on hits', 'Fever grin, boost squint, dizzy flips'] },
   { v: '1.13', name: 'Feel Good', sum: 'Faster, punchier, easier to read.', visual: 'Ground, pipe score, colours',
     notes: ['Scrolling pixel ground: feel the speed', 'Big pipe score: ding and pop, +1 scrap', 'Rivet is bigger and on the title', 'Each zone gets its own pipe colour', 'Tighter pipes, journey map up top'] },
+  { v: '1.14', name: 'Fair Share', sum: 'Wider view, fairer coins and upgrades.', visual: 'Coin trails, wide view',
+    notes: ['Camera pulled back even further', 'Coins come in trails along your path', 'Coins are bigger and spin', 'An upgrade bubble every 250 m', 'A bit faster to match the view'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -218,6 +221,7 @@ const payRate  = () => tl('salv') >= 2 ? 6 : 4;
 const mOf = () => run.dist / PPM;
 
 // ---------- Run setup ----------
+function nextBubbleFrom(sa) { return FX().wide ? (sa < 100 ? 100 : 100 + (Math.floor((sa - 100) / 250) + 1) * 250) : !FX().flow ? (Math.floor(sa / 500) + 1) * 500 : sa < 120 ? 120 : sa < 320 ? 320 : (Math.floor((sa - 320) / 400) + 1) * 400 + 320; }
 function newRun() {
   setView();
   const sa = (!dailyMode && FX().workshop && save.startAlt) || 0;
@@ -228,7 +232,7 @@ function newRun() {
     cards: {}, shields: (tl('hull') >= 1 ? 1 : 0) + (tl('hull') >= 2 ? 1 : 0),
     invuln: 0, boostT: 0, fever: 0, feverT: 0, wind: 0, windT: 0, boltT: 3,
     scrap: 0, exact: 0, payout: 0, maxM: sa, passed: 0, startAlt: sa,
-    gi: FX().guardians ? GUARDS.findIndex(g => g.alt > sa) : -1, fight: null, nextBubble: !FX().flow ? (Math.floor(sa / 500) + 1) * 500 : sa < 120 ? 120 : sa < 320 ? 320 : (Math.floor((sa - 320) / 400) + 1) * 400 + 320,
+    gi: FX().guardians ? GUARDS.findIndex(g => g.alt > sa) : -1, fight: null, nextBubble: nextBubbleFrom(sa),
     phoenix: false, killer: '', victory: false, zone: zoneOf(sa), lastFlap: -9,
     gates: [], gravDir: 1, gravT: 0, lastGateX: -1e9, hp: FX().health ? 3 : 0, maxHp: FX().health ? 3 : 0, hearts: [], beatT: 0, tiltV: 0, afterBoost: 0, boostEase: 0, streak: 0, bestStreak: 0, chain: 0, chainT: 0, coinCombo: 0, coinT: -9, genCount: 0, freeze: 0, dying: false, dyingT: 0, hint: '', lastHundred: Math.floor(sa / 100), spin: 0,
   };
@@ -241,11 +245,11 @@ function startRun(daily, startAlt) {
   seedRand = dailyMode ? mulberry(seed) : Math.random;
   pickRand = dailyMode ? mulberry(seed ^ 0x9e3779b9) : Math.random;
   state = 'play'; newRun();
-  if (typeof startAlt === 'number') { run.dist = startAlt * PPM; run.maxM = startAlt; run.pipes = []; run.genX = run.dist + VW + 240; run.gi = GUARDS.findIndex(g => g.alt > startAlt); genPipes(); }
+  if (typeof startAlt === 'number') { run.dist = startAlt * PPM; run.maxM = startAlt; run.pipes = []; run.genX = run.dist + VW + 240; run.gi = GUARDS.findIndex(g => g.alt > startAlt); run.nextBubble = nextBubbleFrom(startAlt); genPipes(); }
 }
 
 // ---------- World generation (ahead of the camera, never depends on the player) ----------
-const speedNow = () => ZSPD[zoneOf(mOf())] * (tl('wing') >= 3 ? 0.94 : 1) * Math.pow(0.92, cl('slow'));
+const speedNow = () => ZSPD[zoneOf(mOf())] * (FX().wide ? 1.1 : 1) * (tl('wing') >= 3 ? 0.94 : 1) * Math.pow(0.92, cl('slow'));
 function genLimit() { return run.gi >= 0 && run.gi < GUARDS.length ? GUARDS[run.gi].alt * PPM - 250 : 1e12; }
 function genPipes() { while (run.genX < run.dist + VW + 700 && run.genX < genLimit()) addPipe(); }
 function addPipe() {
@@ -266,7 +270,7 @@ function addPipe() {
     bubbleHere = true;
     const g0 = run.gi >= 0 && run.gi < GUARDS.length ? GUARDS[run.gi].alt : 1e9;
     if (run.nextBubble < g0 - 40) run.bubbles.push({ x: run.genX + p.w / 2, p, got: false });
-    run.nextBubble += !FX().flow ? 500 : run.nextBubble < 320 ? 200 : 400;
+    run.nextBubble += FX().wide ? 250 : !FX().flow ? 500 : run.nextBubble < 320 ? 200 : 400;
   }
   const midX = run.genX + sp * 0.5, roll = seedRand(), gc = run.genCount++;
   // pipe variety, introduced zone by zone
@@ -290,9 +294,17 @@ function addPipe() {
   if (roll < 0.34) { if (FX().drones) run.drones.push({ x: midX, y0: grng(130, VH - 130), amp: grng(20, 70), ph: grng(0, 6.28), spd: grng(1.2, 2.2), dead: false, y: VH / 2 }); }
   else if (roll < 0.56 && z >= 2) run.gears.push({ x: midX, y0: grng(170, VH - 170), amp: grng(60, 130), ph: grng(0, 6.28), spd: grng(1.4, 2.4), a: 0, y: VH / 2 });
   else if (roll < 0.62) { if (FX().pads) run.pads.push({ x: midX, y: grng(150, VH - 150), got: false }); }
-  if (seedRand() < 0.8 && FX().scrap) run.scraps.push({ x: midX + grng(-40, 40), y: grng(110, VH - 110), r: 8, v: seedRand() < 0.1 ? 5 : 1 });
+  if (FX().wide) {
+    if (FX().scrap && gc > 0) {
+      const still = p.kind === 'normal' || p.kind === 'spring' || p.kind === 'pinch';
+      if (seedRand() < 0.4) { const xs = still ? [-56, 29, 114] : [-60, 118]; xs.forEach(o => run.scraps.push({ x: p.x + o, y: still ? gy : p.gy, r: 12, v: 1 })); }   // a trail through the gap
+      if (gc % 5 === 2) { const ny = clamp(gy + grng(-60, 60), 140, VH - GROUND_H - 120); for (let k = 0; k < 4; k++) run.scraps.push({ x: midX - 54 + k * 36, y: ny - Math.sin(k / 3 * Math.PI) * 40, r: 12, v: 1 }); }   // an arc between pipes
+      if (seedRand() < 0.06) run.scraps.push({ x: midX, y: clamp(gy, 140, VH - GROUND_H - 120), r: 13, v: 5 });   // a rare blue gem
+    }
+  }
+  else if (seedRand() < 0.8 && FX().scrap) run.scraps.push({ x: midX + grng(-40, 40), y: grng(110, VH - 110), r: 8, v: seedRand() < 0.1 ? 5 : 1 });
   // risk/reward coin hugging a pipe edge
-  if (FX().flow && gc > 2 && seedRand() < 0.22) run.scraps.push({ x: p.x + p.w / 2, y: gy + (seedRand() < 0.5 ? -1 : 1) * (base / 2 - 14), r: 8, v: 3, risky: true });
+  if (FX().flow && gc > 2 && seedRand() < (FX().wide ? 0.15 : 0.22)) run.scraps.push({ x: p.x + p.w / 2, y: gy + (seedRand() < 0.5 ? -1 : 1) * (base / 2 - 14), r: FX().wide ? 11 : 8, v: 3, risky: true });
   // the start of every run teaches the two big ideas: a drone to stomp at pipe 2, a launcher at pipe 6
   if (FX().health && gc >= 8 && gc % 12 === 8) run.hearts.push({ x: midX, y: grng(150, VH - 150), got: false });
   if (gc === 2 && FX().flow && FX().drones) run.drones.push({ x: midX, y0: 250, amp: 30, ph: 0, spd: 1.6, dead: false, y: 250, tut: true });
@@ -531,7 +543,7 @@ function update(dt) {
       else { p.minEdge = Math.min(p.minEdge, edge); p.lastGi = gi2; }
     }
     if (!p.passed && sx + p.w < BX - r) {
-      p.passed = true; run.passed++; run.passT = run.t; if (FX().feel) { SFX.ding(); addScrap(1, BX + 24, b.y - 34); const gc = gapsOf(p)[0]; for (let i = 0; i < 8; i++) parts.push({ x: sx + p.w / 2, y: (gc[0] + gc[1]) / 2, vx: rng(-120, 120), vy: rng(-120, 120), l: .4, c: i % 2 ? '#fee761' : '#ffffff' }); } else SFX.point();
+      p.passed = true; run.passed++; run.passT = run.t; if (FX().feel) { SFX.ding(); if (!FX().wide) addScrap(1, BX + 24, b.y - 34); const gc = gapsOf(p)[0]; for (let i = 0; i < 8; i++) parts.push({ x: sx + p.w / 2, y: (gc[0] + gc[1]) / 2, vx: rng(-120, 120), vy: rng(-120, 120), l: .4, c: i % 2 ? '#fee761' : '#ffffff' }); } else SFX.point();
       const ng = gaps.reduce((best, g2, i) => Math.abs(b.y - (g2[0] + g2[1]) / 2) < Math.abs(b.y - (best[0] + best[1]) / 2) ? g2 : best, gaps[0]);
       if (pk === 'split' && p.lastGi === 0) { addScrap(3, BX + 30, b.y - 40); float('HIGH ROAD!', BX + 30, b.y - 58, '#fee761'); addFever(8); }
       if (pk === 'split' && !save.seen.split) { save.seen.split = true; persist(); }
@@ -919,7 +931,7 @@ function drawJunkBird() {
         case 'worried': ox = Math.sin(t * 40) * 1.5; break;
         case 'wait': oy = Math.sin(t * 3) * 3; rot = Math.sin(t * 1.5) * .08; break;
       }
-      if (FX().feel) { sx *= 1.25; sy *= 1.25; }
+      if (FX().feel) { const bs = FX().wide ? 1.45 : 1.25; sx *= bs; sy *= bs; }
       ctx.save(); ctx.translate(BX + ox, b.y + oy); ctx.rotate(rot); ctx.scale(sx, sy); ctx.translate(-BX, -b.y);
       drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0);
       ctx.save(); ctx.translate(Math.round(BX / 4) * 4, Math.round(b.y / 4) * 4); if (run.gravDir < 0) ctx.scale(1, -1); ctx.globalAlpha = blink ? .4 : 1; drawFace(m.type, k, t); ctx.restore();
@@ -1197,7 +1209,16 @@ function drawWorld() {
   }
   if (FX().feel) drawGround(z, run.dist, VH - GROUND_H, VW, VH);
   for (const h of run.hearts) { const x = h.x - d; if (x < -40 || x > VW + 40) continue; drawHeartPx(Math.round((x - 14) / 4) * 4, Math.round((h.y - 12 + Math.sin(run.t * 4) * 3) / 4) * 4, 4, '#e43b44', '#f6757a'); }
-  for (const s of run.scraps) { const x = s.x - d; if (x < -20 || x > VW + 20) continue; ctx.fillStyle = s.v > 1 ? '#6fe3ff' : '#ffd24a'; ctx.beginPath(); ctx.arc(x, s.y, s.r, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(x, s.y, s.r * .45, 0, 7); ctx.fill(); }
+  if (FX().wide) for (const s of run.scraps) {                       // big spinning pixel coins; blue gems are worth 5
+    const x = s.x - d; if (x < -30 || x > VW + 30 || s.got) continue;
+    const ph = Math.abs(Math.cos(run.t * 4 + s.x * 0.013)), ww = Math.max(4, Math.round(s.r * ph / 2) * 4), hh = s.r * 2, X = Math.round(x / 4) * 4, Y = Math.round(s.y / 4) * 4;
+    const gem = s.v >= 5, rk = s.risky, c0 = gem ? '#124e89' : '#be4a2f', c1 = gem ? '#0099db' : rk ? '#f77622' : '#feae34', c2 = gem ? '#2ce8f5' : '#fee761';
+    ctx.fillStyle = '#181425'; ctx.fillRect(X - ww / 2 - 4, Y - hh / 2, ww + 8, hh); ctx.fillRect(X - ww / 2, Y - hh / 2 - 4, ww, hh + 8);
+    ctx.fillStyle = c0; ctx.fillRect(X - ww / 2, Y - hh / 2, ww, hh);
+    ctx.fillStyle = c1; ctx.fillRect(X - ww / 2, Y - hh / 2, Math.max(4, ww - 4), hh - 4);
+    if (ww >= 12) { ctx.fillStyle = c2; ctx.fillRect(X - ww / 2 + 4, Y - hh / 2 + 4, 4, hh - 12); ctx.fillStyle = c0; ctx.fillRect(X - 2, Y - 6, 4, 12); }
+  }
+  else for (const s of run.scraps) { const x = s.x - d; if (x < -20 || x > VW + 20) continue; ctx.fillStyle = s.v > 1 ? '#6fe3ff' : '#ffd24a'; ctx.beginPath(); ctx.arc(x, s.y, s.r, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(x, s.y, s.r * .45, 0, 7); ctx.fill(); }
   for (const bu of run.bubbles) { const x = bu.x - d; if (x < -40 || x > VW + 40) continue; const y = bu.p.cy + Math.sin(run.t * 3) * 4; ctx.fillStyle = 'rgba(160,110,255,.35)'; ctx.beginPath(); ctx.arc(x, y, 20, 0, 7); ctx.fill(); ctx.strokeStyle = '#c9b0ff'; ctx.lineWidth = 2; ctx.stroke(); text('?', x, y, 20, '#fff'); }
   for (const p of run.pads) { const x = p.x - d; if (x < -30 || x > VW + 30) continue; ctx.fillStyle = '#ff9a3d'; rr(x - 15, p.y - 15, 30, 30, 8); ctx.fill(); ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.moveTo(x + 9, p.y); ctx.lineTo(x - 5, p.y - 9); ctx.lineTo(x - 5, p.y + 9); ctx.fill(); }
   for (const dr of run.drones) { const x = dr.x - d; if (x < -30 || x > VW + 30) continue; drawDrone(dr, x); }
@@ -1236,11 +1257,11 @@ function drawWorld() {
     const charging = F.beams.some(m3 => m3.t <= m3.warn), firing = F.beams.some(m3 => m3.t > m3.warn);
     drawBoss(F.gi, bx, by, tt, charging, firing, F.hitT > 0);
     // boss health: one block per hit left
-    const bw = 22, bn = gd.hits, bx0 = Math.round((VW - bn * (bw + 4)) / 2);
-    ctx.fillStyle = '#181425'; ctx.fillRect(bx0 - 6, 118, bn * (bw + 4) + 8, 26);
-    for (let q = 0; q < bn; q++) { ctx.fillStyle = q < F.hp ? (F.hitT > 0 && q === F.hp - 1 ? '#fff' : '#e43b44') : '#3a4466'; ctx.fillRect(bx0 + q * (bw + 4), 124, bw, 14); }
-    text(gd.name.toUpperCase(), VW / 2, 108, 12, '#feae34');
-    if (F.age < 5) text('FLY INTO THE BLUE ORBS', VW / 2, 154, 11, '#b8e8ff');
+    const kz = 0.8 / ZS, bw = 22 * kz, bn = gd.hits, bx0 = Math.round((VW - bn * (bw + 4 * kz)) / 2);
+    ctx.fillStyle = '#181425'; ctx.fillRect(bx0 - 6 * kz, 118 * kz, bn * (bw + 4 * kz) + 8 * kz, 26 * kz);
+    for (let q = 0; q < bn; q++) { ctx.fillStyle = q < F.hp ? (F.hitT > 0 && q === F.hp - 1 ? '#fff' : '#e43b44') : '#3a4466'; ctx.fillRect(bx0 + q * (bw + 4 * kz), 124 * kz, bw, 14 * kz); }
+    text(gd.name.toUpperCase(), VW / 2, 108 * kz, 12 * kz, '#feae34');
+    if (F.age < 5) text('FLY INTO THE BLUE ORBS', VW / 2, 154 * kz, 11 * kz, '#b8e8ff');
   }
 }
 
@@ -1414,7 +1435,7 @@ function drawClassicEnd() {
 
 // ---------- Live mini scene of any version (used by the title and the updates screen) ----------
 function drawMini(v, t, x, y, w, h, sc) {
-  const f = VERS[v - 1].f, s = (sc || w / 400) * (f.zoom ? 0.8 : 1), sh = h / s, sp = 100;
+  const f = VERS[v - 1].f, s = (sc || w / 400) * zsOf(f), sh = h / s, sp = 100;
   const z = f.zones ? Math.floor(t / 3.5) % 5 : 0, gh = f.feel ? GROUND_H : f.junk ? 8 : 52;
   const feverOn = !!f.fever && (t % 9) > 5.5;
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.translate(x, y); ctx.scale(s, s);
@@ -1485,7 +1506,7 @@ function drawHUD() {
     if (save.best) { ctx.fillStyle = PXC.white; ctx.fillRect(at(save.best) - 1, py - 2, 2, 12); }
     const rx = at(run.maxM); ctx.fillStyle = PXC.ink; ctx.fillRect(rx - 6, py - 6, 14, 12); ctx.fillStyle = '#a2b2d0'; ctx.fillRect(rx - 4, py - 4, 10, 8); ctx.fillStyle = '#d9531a'; ctx.fillRect(rx - 4, py, 6, 4); ctx.fillStyle = '#feae34'; ctx.fillRect(rx + 6, py - 2, 4, 2); ctx.fillStyle = PXC.ink; ctx.fillRect(rx + 2, py - 2, 2, 2);
     const pop = Math.max(0, 1 - (run.t - (run.passT ?? -9)) / 0.2), ps = Math.round(44 * (1 + 0.3 * pop));
-    text(String(run.passed), W / 2, 58, ps, pop > 0 ? PXC.yellow : PXC.white);
+    if (!run.fight) text(String(run.passed), W / 2, 58, ps, pop > 0 ? PXC.yellow : PXC.white);
     text(fmt(run.maxM) + ' / ' + fmt(SUMMIT) + ' m', 14, 34, 12, PXC.ice, 'left');
   }
   else if (FX().guardians) {
@@ -1643,9 +1664,9 @@ function drawUpdates() {
     panel(P.x + 10, P.y + 10, 88, 26, { fill: PXC.ink, hi: PXC.ink }); text('V1.0 BASE', P.x + 54, P.y + 23, 11, PXC.white);
     panel(P.x + P.w - 74, P.y + 10, 64, 26, { fill: PXC.ink, hi: PXC.ink }); text(`V${V.v}`, P.x + P.w - 42, P.y + 23, 11, PXC.yellow);
   }
-  const cw = 46, gap = 4, x0 = (W - (7 * cw + 6 * gap)) / 2;
+  const cw = 42, gap = 4, x0 = (W - (8 * cw + 7 * gap)) / 2;
   for (let i = 1; i <= LATEST; i++) {
-    const cx = x0 + ((i - 1) % 7) * (cw + gap), cy = i <= 7 ? 372 : 404, sel = i === pv;
+    const cx = x0 + ((i - 1) % 8) * (cw + gap), cy = i <= 8 ? 372 : 404, sel = i === pv;
     btn(VERS[i - 1].v, cx, cy, cw, 28, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 12 });
   }
   panel(20, 438, 360, 142);
