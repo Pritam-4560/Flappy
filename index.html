@@ -58,7 +58,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -90,6 +90,8 @@ const VERS = [
     notes: ['Scrolling pixel ground: feel the speed', 'Big pipe score: ding and pop, +1 scrap', 'Rivet is bigger and on the title', 'Each zone gets its own pipe colour', 'Tighter pipes, journey map up top'] },
   { v: '1.14', name: 'Fair Share', sum: 'Room to breathe, fairer coins.', visual: 'Roomy pipes, coin trails',
     notes: ['Much more room between pipes', 'Coins come in trails along your path', 'Coins are bigger and spin', 'An upgrade bubble every 250 m', 'Fair coins: grab them, no freebies'] },
+  { v: '1.15', name: 'Lucky Dip', sum: 'Bubbles roll a random power. No menus.', visual: 'Slot-machine power reveal',
+    notes: ['Grab a bubble: a random power rolls in', 'No pause, no menu, you keep flying', 'A banner tells you what you got', 'Guardians drop two powers at once', 'Salvage 3: bubbles give two powers'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -116,7 +118,7 @@ const TIER_COST = [60, 300, 1000, 2500];
 const BRANCHES = [
   { id: 'hull', name: 'Hull',    tiers: ['Start with 1 shield', 'Start with 2 shields', 'Tighter frame: smaller hitbox, gravity -5%', 'Phoenix Core: revive once per run'] },
   { id: 'wing', name: 'Wings',   tiers: ['Pipe gaps +10 px', 'Flap power +6%', 'World moves 6% slower', 'Gaps +10 px more, Fever lasts 4 s longer'] },
-  { id: 'salv', name: 'Salvage', tiers: ['+20% scrap', 'Distance bonus: 6 scrap per 10 m', 'Card bubbles offer 4 cards', '+50% scrap'] },
+  { id: 'salv', name: 'Salvage', tiers: ['+20% scrap', 'Distance bonus: 6 scrap per 10 m', 'Card bubbles offer 4 cards', '+50% scrap'], tiersLuck: ['+20% scrap', 'Distance bonus: 6 scrap per 10 m', 'Bubbles give 2 powers', '+50% scrap'] },
 ];
 const CANNONS = [{ g: 0, alt: 500, cost: 300 }, { g: 1, alt: 1200, cost: 900 }];
 
@@ -380,12 +382,21 @@ function finish(victory) {
   for (let i = 0; i < 30; i++) parts.push({ x: BX, y: run.bird.y, vx: rng(-200, 200), vy: rng(-250, 150), l: rng(.4, 1), c: ['#ffd24a', '#ff6a3d', '#fff'][i % 3] });
 }
 function offerPick(rare) {
+  if (FX().luck) return luckyDip(rare ? 2 : tl('salv') >= 3 ? 2 : 1, rare);
   const n = tl('salv') >= 3 ? 4 : 3;
   const pool = CARDS.filter(c => cl(c.id) < c.stack && (!c.hp || FX().health));
   const picks = [];
   while (picks.length < n && pool.length) picks.push(pool.splice((pickRand() * pool.length) | 0, 1)[0]);
   if (!picks.length) return;
   cards = picks; run.pickTitle = rare ? 'GUARDIAN DOWN - CLAIM A REWARD' : 'CARD BUBBLE - CHOOSE ONE'; state = 'pick';
+}
+function luckyDip(n, rare) {          // no menu: roll random powers, apply them, and say what they were
+  const pool = CARDS.filter(c => cl(c.id) < c.stack && (!c.hp || FX().health) && !(c.id === 'heart' && run.hp >= run.maxHp));
+  const got = [];
+  while (got.length < n && pool.length) { const c = pool.splice((pickRand() * pool.length) | 0, 1)[0]; got.push(c); cards = [c]; choose(0); }
+  if (!got.length) return;
+  run.gift = { cards: got, t: 0, rare: !!rare }; run.invuln = Math.max(run.invuln, 0.6);
+  SFX.milestone(); if (FX().emote) emote('cheer');
 }
 function choose(i) {
   const c = cards[i]; if (!c) return;
@@ -461,7 +472,7 @@ function update(dt) {
   }
   if (run.freeze > 0) { run.freeze -= dt; return; }  // tiny hit-stop on big moments
   const gd = run.gravDir;
-  run.t += dt; if (FX().music) music(dt); if (FX().emote) trackEmotes(dt);
+  run.t += dt; if (run.gift) { run.gift.t += dt; if (run.gift.t > 2.6) run.gift = null; } if (FX().music) music(dt); if (FX().emote) trackEmotes(dt);
   if (FX().flow && run.chain > 0) { run.chainT -= dt; if (run.chainT <= 0) run.chain = 0; }
   if (run.invuln > 0) run.invuln -= dt;
   if (run.feverT > 0) {
@@ -1535,6 +1546,20 @@ function drawHUD() {
     text(run.feverT > 0 ? 'FEVER: WIDE GAPS, X2 SCRAP' : 'FEVER', W / 2, H - 46, 11, PXC.ice); }
   }
   if (run.wind) text(run.wind > 0 ? 'WIND DOWN' : 'WIND UP', W / 2, 90, 13, PXC.cyan);
+  if (run.gift) {
+    const G = run.gift, n = G.cards.length, ph = G.t, rolling = ph < 0.7, hgt = 46 + n * 34, y0 = zoneToast.t > 0 ? 200 : 176;
+    const slide = Math.min(1, ph / 0.15), fade = ph > 2.2 ? Math.max(0, 1 - (ph - 2.2) / 0.4) : 1;
+    ctx.globalAlpha = fade;
+    panel(36, Math.round((y0 - (1 - slide) * 30) / 4) * 4, W - 72, hgt, { fill: PXC.navy });
+    text(G.rare ? 'GUARDIAN LOOT!' : rolling ? 'ROLLING...' : 'POWER UP!', W / 2, y0 + 22, 18, G.rare ? PXC.orange : rolling ? PXC.mist : PXC.yellow);
+    G.cards.forEach((c, i) => {
+      const show = rolling ? CARDS[(Math.floor(ph * 22) + i * 5) % CARDS.length] : c, yy = y0 + 54 + i * 34;
+      text(show.name.toUpperCase() + (rolling ? '' : (cl(c.id) > 1 ? '  X' + cl(c.id) : '')), W / 2, yy, 16, rolling ? PXC.ice : PXC.white);
+      if (!rolling) text(c.desc.toUpperCase(), W / 2, yy + 16, 11, PXC.cyan);
+    });
+    if (!rolling && !G.dinged) { G.dinged = true; SFX.ding && SFX.ding(); }
+    ctx.globalAlpha = 1;
+  }
   if (zoneToast.t > 0) { ctx.globalAlpha = Math.min(1, zoneToast.t); text(zoneToast.txt.toUpperCase(), W / 2, 170, 22, PXC.white); ctx.globalAlpha = 1; }
   if (!run.started) {
     panel(40, H / 2 + 52, W - 80, 92, { fill: PXC.navy });
@@ -1610,8 +1635,8 @@ function drawMenu() {
     panel(16, y, W - 32, rowH);
     text(b.name, 32, y + 22, 18, PXC.white, 'left');
     const px0 = 32 + tw(b.name, 18) + 16; for (let k = 0; k < 4; k++) pip(px0 + k * 18, y + 16, k < tr);
-    para(maxed ? 'FULLY UPGRADED' : b.tiers[tr], 32, y + 50, 13, PXC.ice, 236, 14);
-    if (tr > 0) text('NOW: ' + b.tiers[tr - 1], 32, y + 80, 11, PXC.mist, 'left');
+    para(maxed ? 'FULLY UPGRADED' : (FX().luck && b.tiersLuck || b.tiers)[tr], 32, y + 50, 13, PXC.ice, 236, 14);
+    if (tr > 0) text('NOW: ' + (FX().luck && b.tiersLuck || b.tiers)[tr - 1], 32, y + 80, 11, PXC.mist, 'left');
     btn(maxed ? 'MAX' : `⚙ ${fmt(cost)}`, W - 124, y + 24, 96, 44, () => { if (can) { save.scrap -= cost; save.tier[b.id] = tr + 1; persist(); } }, { disabled: !can, color: '#2f9e5e', size: 15 });
   });
   const cy = 84 + 3 * (rowH + 8);
