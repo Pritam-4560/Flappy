@@ -19,7 +19,7 @@
 // Every death banks scrap. Permanent upgrades let you get further until you can finish it in ONE run.
 const W = 400, H = 640, PPM = 20, SUMMIT = 3000, BX = 110;
 let ZS = 1, VW = W, VH = H;
-const zsOf = f => f.zoom ? 0.8 : 1;
+const zsOf = f => f.clean ? 0.75 : f.zoom ? 0.8 : 1;
 function setView() { ZS = zsOf(FX()); VW = W / ZS; VH = H / ZS; LANE_H = VH / 5; }   // 20 px = 1 m, bird sits at x = 110
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 
@@ -58,7 +58,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -92,6 +92,8 @@ const VERS = [
     notes: ['Much more room between pipes', 'Coins come in trails along your path', 'Coins are bigger and spin', 'An upgrade bubble every 250 m', 'Fair coins: grab them, no freebies'] },
   { v: '1.15', name: 'Lucky Dip', sum: 'Bubbles roll a random power. No menus.', visual: 'Slot-machine power reveal',
     notes: ['Grab a bubble: a random power rolls in', 'No pause, no menu, you keep flying', 'A banner tells you what you got', 'Guardians drop two powers at once', 'Salvage 3: bubbles give two powers'] },
+  { v: '1.16', name: 'Clean Up', sum: 'Calmer art, real music, sizes that fit.', visual: 'Clean pixels, chiptunes',
+    notes: ['One pixel size for the whole world', 'No more dither noise: flat, calm skies', 'Background pushed back so pipes pop', 'A real chiptune soundtrack, one per zone', 'Boss, fever and menu music too'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -211,6 +213,63 @@ function music(dt) {
   musStep++;
 }
 
+// ---------- Chiptune soundtrack: a look-ahead sequencer with lead, bass, arp and drums ----------
+const MUS = { next: 0, step: 0, song: '' };
+let MBUS = null, NBUF = null;
+function mbus() { if (!MBUS) { const comp = AC.createDynamicsCompressor(); MBUS = AC.createGain(); MBUS.gain.value = 0.8; MBUS.connect(comp); comp.connect(AC.destination); } return MBUS; }
+function mNote(t, f, dur, type, vol) { const o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.006); g.gain.setValueAtTime(vol, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(mbus()); o.start(t); o.stop(t + dur + 0.02); }
+function mNoise(t, dur, vol, hp) {
+  if (!NBUF) { NBUF = AC.createBuffer(1, AC.sampleRate * 0.5, AC.sampleRate); const d = NBUF.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  const s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain(); s.buffer = NBUF; f.type = 'highpass'; f.frequency.value = hp;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(mbus()); s.start(t, Math.random() * 0.3); s.stop(t + dur + 0.02);
+}
+function mKick(t, vol) { const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.13); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18); o.connect(g); g.connect(mbus()); o.start(t); o.stop(t + 0.2); }
+const MEL = [
+  '5.531358' + '6.641468' + '5.538753' + '7.75257-',
+  '8-7-5-35' + '6-5-4-6-' + '5-3-8-7-' + '9-7-5---',
+  '1-3-5-8-' + '6-4-1-4-' + '3-5-8-5-' + '7-5-2---',
+  '88.75.53' + '66.54.46' + '55.38.75' + '77.59---'];
+const SCALE = [0, 0, 2, 3, 5, 7, 8, 10, 12, 14];
+const SONGS = {
+  menu:  { bpm: 96,  key: -3, ch: [0, 8, 3, 10], mel: [1, 2], drums: 0, lead: 0.035 },
+  z0:    { bpm: 118, key: 0,  ch: [0, 8, 3, 10], mel: [0, 1], drums: 1, lead: 0.045 },
+  z1:    { bpm: 124, key: 2,  ch: [0, 5, 8, 7],  mel: [2, 1], drums: 1, lead: 0.045 },
+  z2:    { bpm: 130, key: -2, ch: [0, 10, 8, 7], mel: [3, 0], drums: 2, lead: 0.045 },
+  z3:    { bpm: 136, key: 3,  ch: [0, 8, 10, 7], mel: [0, 3], drums: 2, lead: 0.045 },
+  z4:    { bpm: 142, key: 5,  ch: [0, 8, 3, 10], mel: [1, 3], drums: 2, lead: 0.05 },
+  boss:  { bpm: 152, key: 0,  ch: [0, 1, 0, -2], mel: [3, 0], drums: 3, lead: 0.05 },
+  end:   { bpm: 84,  key: -5, ch: [0, 8, 5, 7],  mel: [2, 2], drums: 0, lead: 0.03 },
+};
+function songNow() {
+  if (state === 'play' && run) return run.fight ? 'boss' : 'z' + zoneOf(mOf());
+  if (state === 'pick' && run) return 'z' + zoneOf(mOf());
+  if (state === 'dead' || state === 'victory') return 'end';
+  return 'menu';
+}
+function playStep(S, s, t, dur) {
+  const fever = state === 'play' && run && run.feverT > 0, bar = Math.floor(s / 16) % 4, i = s % 16, c = S.ch[bar] + S.key;
+  const minor = [0, 5, 7, -12].includes(S.ch[bar]), tri = minor ? [0, 3, 7, 12] : [0, 4, 7, 12];
+  if ([0, 3, 6, 8, 11, 14].includes(i)) { const f = 110 * Math.pow(2, (c - 12 + (i === 3 || i === 11 ? 12 : 0)) / 12); mNote(t, f, dur * 2.2, 'triangle', 0.16); mNote(t, f * 2, dur * 1.2, 'square', 0.025); }
+  mNote(t, 440 * Math.pow(2, (c + tri[[0, 1, 2, 1][s % 4]] - 12 + (fever ? 12 : 0)) / 12), dur * 0.8, 'square', 0.014);
+  if (s % 2 === 0) {
+    const mel = MEL[S.mel[Math.floor(s / 64) % 2]], k = Math.floor(s / 2) % 32, ch = mel[k];
+    if (ch !== '.' && ch !== '-') { let hold = 1; while (mel[(k + hold) % 32] === '-' && hold < 8) hold++; const f = 440 * Math.pow(2, (S.key + SCALE[+ch]) / 12); mNote(t, f, dur * 2 * hold * 0.92, 'square', S.lead); if (fever) mNote(t, f * 2, dur * 1.6, 'triangle', 0.02); }
+  }
+  if (S.drums) {
+    if (i === 0 || i === 8 || (S.drums >= 2 && i === 10) || (S.drums >= 3 && (i === 4 || i === 12))) mKick(t, 0.5);
+    if (i === 4 || i === 12) mNoise(t, 0.13, 0.12, 1400);
+    if (s % 2 === 0) mNoise(t, i % 4 === 2 ? 0.08 : 0.03, 0.035, 7000);
+  } else if (i === 0) mKick(t, 0.22);
+}
+function musicTick() {
+  if (!AC || muted || !FX().clean || AC.state !== 'running') return;
+  const name = songNow(), S = SONGS[name];
+  if (name !== MUS.song) { MUS.song = name; MUS.step = 0; MUS.next = AC.currentTime + 0.06; }
+  if (MUS.next < AC.currentTime) MUS.next = AC.currentTime + 0.03;
+  const fever = state === 'play' && run && run.feverT > 0, dur = 60 / (S.bpm * (fever ? 1.12 : 1)) / 4;
+  while (MUS.next < AC.currentTime + 0.14) { playStep(S, MUS.step, MUS.next, dur); MUS.next += dur; MUS.step++; }
+}
+
 // ---------- Derived stats ----------
 const gravity  = () => 1350 * (tl('hull') >= 3 ? 0.95 : 1) * Math.pow(0.9, cl('feather'));
 const flapV    = () => 420 * (tl('wing') >= 2 ? 1.06 : 1) * (1 + 0.06 * cl('flap'));
@@ -265,7 +324,7 @@ function addPipe() {
     if (run.slalom) { gy = clamp(VH / 2 + run.slalom.side * 85, lo, hi); run.slalom.side *= -1; slal = true; if (--run.slalom.n <= 0) run.slalom = null; }
   }
   run.lastGy = gy; run.lastSp = sp;
-  const p = { x: run.genX, w: 58, gy, base, amp: slal ? 0 : z >= 1 ? grng(0, z >= 3 ? 70 : 50) : 0, ph: grng(0, 6.28), spd: grng(0.9, 1.7), z, passed: false, minEdge: 99, cy: gy, gap: base };
+  const p = { x: run.genX, w: FX().clean ? 60 : 58, gy, base, amp: slal ? 0 : z >= 1 ? grng(0, z >= 3 ? 70 : 50) : 0, ph: grng(0, 6.28), spd: grng(0.9, 1.7), z, passed: false, minEdge: 99, cy: gy, gap: base };
   run.pipes.push(p);
   let bubbleHere = false;
   if (FX().cards && m >= run.nextBubble) {
@@ -472,7 +531,7 @@ function update(dt) {
   }
   if (run.freeze > 0) { run.freeze -= dt; return; }  // tiny hit-stop on big moments
   const gd = run.gravDir;
-  run.t += dt; if (run.gift) { run.gift.t += dt; if (run.gift.t > 2.6) run.gift = null; } if (FX().music) music(dt); if (FX().emote) trackEmotes(dt);
+  run.t += dt; if (run.gift) { run.gift.t += dt; if (run.gift.t > 2.6) run.gift = null; } if (FX().music && !FX().clean) music(dt); if (FX().emote) trackEmotes(dt);
   if (FX().flow && run.chain > 0) { run.chainT -= dt; if (run.chainT <= 0) run.chain = 0; }
   if (run.invuln > 0) run.invuln -= dt;
   if (run.feverT > 0) {
@@ -637,17 +696,19 @@ const PAL = ['#be4a2f', '#d77643', '#ead4aa', '#e4a672', '#b86f50', '#733e39', '
   '#124e89', '#0099db', '#2ce8f5', '#ffffff', '#c0cbdc', '#8b9bb4', '#5a6988', '#3a4466', '#262b44', '#181425', '#ff0044', '#68386c', '#b55088', '#f6757a', '#e8b796', '#c28569']
   .map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+let DITHER = 1.8;
 function snapColor(r, g, b, bi) {
   const key = ((r << 16) | (g << 8) | b) * 16 + bi; let v = palCache.get(key); if (v !== undefined) return v;
   let best = null;
   for (const c of palCols) if ((r - c[0]) ** 2 + (g - c[1]) ** 2 + (b - c[2]) ** 2 <= 12) { best = c; break; }   // sprite pixels stay exact
   if (!best) {
-    const o = (bi - 7.5) * 1.8, rr_ = r + o, gg = g + o, bb = b + o; let bd = 1e9;                                    // ordered dither between palette colours
+    const o = (bi - 7.5) * DITHER, rr_ = r + o, gg = g + o, bb = b + o; let bd = 1e9;                                    // ordered dither between palette colours
     for (const c of PAL) { const d = (rr_ - c[0]) ** 2 + (gg - c[1]) ** 2 + (bb - c[2]) ** 2; if (d < bd) { bd = d; best = c; } }
   }
   v = (best[0] << 16) | (best[1] << 8) | best[2]; palCache.set(key, v); return v;
 }
 function pixelate(x, y, w, h, cell = 4) {
+  const dz = FX().clean ? 0 : 1.8; if (dz !== DITHER) { DITHER = dz; palCache.clear(); }
   const lw = Math.round(w / cell), lh = Math.round(h / cell);
   if (LRC.width !== lw || LRC.height !== lh) { LRC.width = lw; LRC.height = lh; }
   LRX.imageSmoothingEnabled = false; LRX.clearRect(0, 0, lw, lh); LRX.drawImage(cv, x, y, w, h, 0, 0, lw, lh);
@@ -942,7 +1003,7 @@ function drawJunkBird() {
         case 'worried': ox = Math.sin(t * 40) * 1.5; break;
         case 'wait': oy = Math.sin(t * 3) * 3; rot = Math.sin(t * 1.5) * .08; break;
       }
-      if (FX().feel) { const bs = 1.25; sx *= bs; sy *= bs; }
+      if (FX().feel) { const bs = FX().clean ? 1 : 1.25; sx *= bs; sy *= bs; }
       ctx.save(); ctx.translate(BX + ox, b.y + oy); ctx.rotate(rot); ctx.scale(sx, sy); ctx.translate(-BX, -b.y);
       drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0);
       ctx.save(); ctx.translate(Math.round(BX / 4) * 4, Math.round(b.y / 4) * 4); if (run.gravDir < 0) ctx.scale(1, -1); ctx.globalAlpha = blink ? .4 : 1; drawFace(m.type, k, t); ctx.restore();
@@ -1012,6 +1073,12 @@ function pipeBar(x, y0, y1, w, Z, capBottom) {
 }
 const hsh = n => { let x = Math.imul(n | 0, 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; return x / 4294967296; };
 function skyGrad(Z, h, fever) {
+  if (FX().clean) {                         // flat bands, a single checker row between them: calm, readable sky
+    const c = fever ? ['#181425', '#68386c', '#b55088', '#f6757a', '#feae34'] : Z.sky, hs = [0.30, 0.22, 0.18, 0.16, 0.14]; let y = 0;
+    c.forEach((col, i) => { const hh = Math.round(h * hs[i] / 4) * 4; ctx.fillStyle = col; ctx.fillRect(0, y, 2 * W, i === c.length - 1 ? h - y + 8 : hh); y += hh; });
+    y = 0; for (let i = 0; i < c.length - 1; i++) { y += Math.round(h * hs[i] / 4) * 4; ctx.fillStyle = c[i]; for (let x = 0; x < 2 * W; x += 8) ctx.fillRect(x, y, 4, 4); }
+    return;
+  }
   const g = ctx.createLinearGradient(0, 0, 0, h), c = fever ? ['#181425', '#68386c', '#b55088', '#f6757a', '#feae34'] : Z.sky;
   c.forEach((col, i) => g.addColorStop(i / (c.length - 1), col)); ctx.fillStyle = g; ctx.fillRect(0, 0, 2 * W, h);
 }
@@ -1199,7 +1266,8 @@ function drawWorld() {
   const m = state === 'menu' ? 0 : mOf(), z = zoneOf(m), Z = ZONES[z];
   skyGrad(Z, VH, run && run.feverT > 0);
   richScenery = !!FX().scenery; drawScenery(z, run.dist, run.t, VH, VH - groundH(), VW);
-  const d = run.dist;
+  if (FX().clean) { ctx.globalAlpha = 0.2; ctx.fillStyle = Z.sky[1]; ctx.fillRect(0, 0, VW, VH); ctx.globalAlpha = 1; }
+  const d = FX().clean ? Math.round(run.dist / 4) * 4 : run.dist;
   ctx.fillStyle = Z.sil; ctx.fillRect(0, VH - 8, VW, 8);
   if (save.best > 0) {
     const bx = save.best * PPM - d;
@@ -1657,7 +1725,7 @@ function drawMenu() {
 }
 function drawTitle() {
   const t = performance.now() / 1000, V = VERS[ver - 1];
-  inWorld = true; drawMini(ver, t, 0, 0, W, H); inWorld = false; pixelate(0, 0, W, H); flushText();
+  inWorld = true; drawMini(ver, t, 0, 0, W, H); inWorld = false; pixelate(0, 0, W, H, FX().clean ? 3 : 4); flushText();
   dimDither(1);
   if (FX().feel && rivetOk) { ctx.save(); ctx.translate(W / 2, 258 + Math.round(Math.sin(t * 2.4) * 2) * 3); ctx.scale(1.5, 1.5); drawRivetSprite(0, 0, Math.floor(t * 12) % 8, 0, false, false, 1); ctx.restore(); }
   pixTextDraw('FLAPOCALYPSE', W / 2, 150, 40, PXC.yellow, 'center', PXC.ink);
@@ -1680,7 +1748,7 @@ function drawUpdates() {
   inWorld = true;
   drawMini(1, t, P.x, P.y, P.w, P.h, 1);
   if (pv > 1) { ctx.save(); ctx.beginPath(); ctx.rect(sx, P.y, P.x + P.w - sx, P.h); ctx.clip(); deferMinX = sx; drawMini(pv, t, P.x, P.y, P.w, P.h, 1); deferMinX = null; ctx.restore(); }
-  inWorld = false; pixelate(P.x, P.y, P.w, P.h); flushText();
+  inWorld = false; pixelate(P.x, P.y, P.w, P.h, VERS[pv - 1].f.clean ? 3 : 4); flushText();
   if (pv > 1) {
     const gx = Math.round(sx / 4) * 4;
     ctx.fillStyle = PXC.ink; ctx.fillRect(gx - 4, P.y, 8, P.h); ctx.fillStyle = PXC.white; ctx.fillRect(gx - 2, P.y, 4, P.h);
@@ -1689,9 +1757,9 @@ function drawUpdates() {
     panel(P.x + 10, P.y + 10, 88, 26, { fill: PXC.ink, hi: PXC.ink }); text('V1.0 BASE', P.x + 54, P.y + 23, 11, PXC.white);
     panel(P.x + P.w - 74, P.y + 10, 64, 26, { fill: PXC.ink, hi: PXC.ink }); text(`V${V.v}`, P.x + P.w - 42, P.y + 23, 11, PXC.yellow);
   }
-  const cw = 42, gap = 4, x0 = (W - (8 * cw + 7 * gap)) / 2;
+  const cw = 38, gap = 4, x0 = (W - (9 * cw + 8 * gap)) / 2;
   for (let i = 1; i <= LATEST; i++) {
-    const cx = x0 + ((i - 1) % 8) * (cw + gap), cy = i <= 8 ? 372 : 404, sel = i === pv;
+    const cx = x0 + ((i - 1) % 9) * (cw + gap), cy = i <= 9 ? 372 : 404, sel = i === pv;
     btn(VERS[i - 1].v, cx, cy, cw, 28, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 12 });
   }
   panel(20, 438, 360, 142);
@@ -1755,6 +1823,7 @@ function frame(ts) {
   if (fadeA > 0) fadeA = Math.max(0, fadeA - dt * 3.2);
   if (resumeT > 0 && !paused) { const was = Math.ceil(resumeT / 0.55); resumeT -= dt; if (Math.ceil(Math.max(0, resumeT) / 0.55) !== was) SFX.tick(); }
   else if (!paused) update(dt);
+  try { musicTick(); } catch (e) {}
   render(); requestAnimationFrame(frame);
 }
 function toLogical(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; }
