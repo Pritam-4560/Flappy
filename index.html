@@ -4,10 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Flapocalypse</title>
+<meta name="description" content="A one-tap pixel-art Flappy roguelite. Fly a tin robot bird up a 3,000 m map, beat three guardians, upgrade between runs.">
+<meta name="theme-color" content="#181425">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta property="og:title" content="Flapocalypse">
+<meta property="og:description" content="One tap. One long map. Can you reach the summit in a single run?">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%23181425'/%3E%3Crect x='3' y='5' width='9' height='7' fill='%23a2b2d0'/%3E%3Crect x='3' y='8' width='5' height='3' fill='%23d9531a'/%3E%3Crect x='12' y='7' width='3' height='2' fill='%23feae34'/%3E%3Crect x='9' y='6' width='2' height='2' fill='%23ffffff'/%3E%3Crect x='10' y='6' width='1' height='1' fill='%23181425'/%3E%3Crect x='7' y='3' width='1' height='2' fill='%23e43b44'/%3E%3C/svg%3E">
 <style>
-  html,body{margin:0;height:100%;background:#0b0f1a;overflow:hidden;touch-action:none;user-select:none;overscroll-behavior:none;-webkit-user-select:none}
+  html,body{margin:0;height:100%;background:#181425;overflow:hidden;touch-action:none;user-select:none;overscroll-behavior:none;-webkit-user-select:none}
   body{display:flex;align-items:center;justify-content:center}
-  canvas{height:100vh;height:100dvh;max-width:100vw;aspect-ratio:400/640;background:#141b2e;image-rendering:pixelated;-webkit-tap-highlight-color:transparent}
+  canvas{width:min(100vw,62.5vh);width:min(100vw,62.5dvh);height:auto;aspect-ratio:400/640;background:#141b2e;image-rendering:pixelated;-webkit-tap-highlight-color:transparent}
 </style>
 </head>
 <body>
@@ -22,6 +29,9 @@ let ZS = 1, VW = W, VH = H;
 const zsOf = f => f.clean ? 0.75 : f.zoom ? 0.8 : 1;
 function setView() { ZS = zsOf(FX()); VW = W / ZS; VH = H / ZS; LANE_H = VH / 5; }   // 20 px = 1 m, bird sits at x = 110
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let K = 1;                                                     // backing-store scale: crisp pixels on any screen, never stretched
+function fitCanvas() { const r = cv.getBoundingClientRect(), k = Math.min(4, Math.max(1, (r.width || 400) * (window.devicePixelRatio || 1) / 400)); if (Math.abs(k - K) > 0.01 || cv.width !== Math.round(400 * k)) { K = k; cv.width = Math.round(400 * K); cv.height = Math.round(640 * K); } }
+window.addEventListener('resize', fitCanvas);
 
 // ---------- Map ----------
 const ZONES = [
@@ -58,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -96,6 +106,8 @@ const VERS = [
     notes: ['One pixel size for the whole world', 'No more dither noise: flat, calm skies', 'Background pushed back so pipes pop', 'A real chiptune soundtrack, one per zone', 'Boss, fever and menu music too'] },
   { v: '1.17', name: 'The Garage', sum: 'A cute pixel shop, coin paths, new songs.', visual: 'Shop, skins, hats, coin paths',
     notes: ['A cute pixel shop with a robot keeper', 'Buy colours and hats, dress up Rivet', 'Coins now trace the path between pipes', 'Catchier songs with echo and drum fills', 'Six colours, five hats, more to come'] },
+  { v: '1.18', name: 'Launch', sum: 'Ramps up as you go. Polished for release.', visual: 'Smooth speed ramp, polish',
+    notes: ['Speed creeps up the further you fly', '10% more room between pipes', 'Zones blend speed instead of jumping', 'Lots of small fixes and polish', 'Ready for launch!'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -366,12 +378,13 @@ function startRun(daily, startAlt) {
 }
 
 // ---------- World generation (ahead of the camera, never depends on the player) ----------
-const speedNow = () => ZSPD[zoneOf(mOf())] * (tl('wing') >= 3 ? 0.94 : 1) * Math.pow(0.92, cl('slow'));
+const rampSpeed = () => { const m = mOf(), z = zoneOf(m), z0 = z ? ZONES[z - 1].to : 0, f = clamp((m - z0) / Math.max(1, ZONES[z].to - z0), 0, 1), next = ZSPD[Math.min(4, z + 1)]; return (ZSPD[z] + (next - ZSPD[z]) * f * 0.6) * (1 + Math.min(0.12, Math.max(0, m - (run.startAlt || 0)) / 2500)); };
+const speedNow = () => (FX().ramp ? rampSpeed() : ZSPD[zoneOf(mOf())]) * (tl('wing') >= 3 ? 0.94 : 1) * Math.pow(0.92, cl('slow'));
 function genLimit() { return run.gi >= 0 && run.gi < GUARDS.length ? GUARDS[run.gi].alt * PPM - 250 : 1e12; }
 function genPipes() { while (run.genX < run.dist + VW + 700 && run.genX < genLimit()) addPipe(); }
 function addPipe() {
   const m = run.genX / PPM, z = zoneOf(m), early = FX().flow ? Math.max(0, 34 - run.genCount * 4) : 0, base = ZGAP[z] + early;
-  const sp = ZSP[z] * grng(0.94, 1.06) * (FX().wide ? 1.3 : FX().feel ? 0.86 : 1);
+  const sp = ZSP[z] * grng(0.94, 1.06) * (FX().ramp ? 1.43 : FX().wide ? 1.3 : FX().feel ? 0.86 : 1);
   const t = run.lastSp / ZSPD[z], d = clamp(170 * t, 70, 260);
   const lo = 70 + base / 2, hi = VH - 70 - base / 2 - (FX().feel ? 56 : 0);
   let gy = clamp(grng(run.lastGy - d, run.lastGy + d * 1.25), lo, hi), slal = false;
@@ -495,7 +508,7 @@ function finish(victory) {
   state = victory ? 'victory' : 'dead'; run.victory = victory; shake = 14; deadAt = performance.now();
   if (victory) SFX.win(); else if (!FX().flow) SFX.die(); flash = { c: victory ? '#ffd24a' : '#fff', a: victory || !FX().flow ? .6 : .25 };
   run.score = FX().junk ? run.maxM : run.passed;
-  run.payout = FX().scrap ? Math.floor(run.maxM / 10) * payRate() + (victory ? 500 : 0) : 0;
+  run.payout = FX().scrap ? Math.floor((run.maxM - (FX().launch ? run.startAlt || 0 : 0)) / 10) * payRate() + (victory ? 500 : 0) : 0;
   save.scrap += run.scrap + run.payout; save.runs++;
   run.newBest = Math.floor(run.score) > save.best; if (run.newBest) save.best = Math.floor(run.score);
   if (victory) save.summits++;
@@ -777,7 +790,7 @@ function pixelate(x, y, w, h, cell = 4) {
   const dz = FX().clean ? 0 : 1.8; if (dz !== DITHER) { DITHER = dz; palCache.clear(); }
   const lw = Math.round(w / cell), lh = Math.round(h / cell);
   if (LRC.width !== lw || LRC.height !== lh) { LRC.width = lw; LRC.height = lh; }
-  LRX.imageSmoothingEnabled = false; LRX.clearRect(0, 0, lw, lh); LRX.drawImage(cv, x, y, w, h, 0, 0, lw, lh);
+  LRX.imageSmoothingEnabled = false; LRX.clearRect(0, 0, lw, lh); LRX.drawImage(cv, x * K, y * K, w * K, h * K, 0, 0, lw, lh);
   let id; try { id = LRX.getImageData(0, 0, lw, lh); } catch (e) { return; }
   const d = id.data;
   for (let i = 0, q = 0; i < d.length; i += 4, q++) { const v = snapColor(d[i], d[i + 1], d[i + 2], BAYER[(((q / lw) | 0) & 3) * 4 + (q % lw & 3)]); d[i] = v >> 16; d[i + 1] = (v >> 8) & 255; d[i + 2] = v & 255; d[i + 3] = 255; }
@@ -869,7 +882,7 @@ function rr(x, y, w, h, r) {
   ctx.lineTo(X, Y + c); ctx.lineTo(X + s, Y + c); ctx.lineTo(X + s, Y + s); ctx.lineTo(X + c, Y + s); ctx.closePath();
 }
 function text(t, x, y, size = 16, c = '#fff', align = 'center', bold = true) {
-  if (inWorld) { const m = ctx.getTransform(), sx = m.a * x + m.e; if (deferMinX !== null && sx < deferMinX) return; deferred.push([t, sx, m.d * y + m.f, size * m.a, c, align, bold]); return; }
+  if (inWorld) { const m = ctx.getTransform(), sx = (m.a * x + m.e) / K; if (deferMinX !== null && sx < deferMinX) return; deferred.push([t, sx, (m.d * y + m.f) / K, size * m.a / K, c, align, bold]); return; }
   if (pixText) { pixTextDraw(t, x, y, size, c, align, null); return; }
   ctx.font = `${bold ? '700 ' : ''}${size}px system-ui,Segoe UI,sans-serif`;
   ctx.fillStyle = c; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y);
@@ -907,6 +920,7 @@ function pixBar(x, y, w, h, f, col, bg) {
 function pip(x, y, on) { ctx.fillStyle = PXC.ink; ctx.fillRect(x - 2, y - 2, 14, 14); ctx.fillStyle = on ? PXC.gold : PXC.slate; ctx.fillRect(x, y, 10, 10); if (on) { ctx.fillStyle = PXC.yellow; ctx.fillRect(x + 2, y + 2, 4, 2); } }
 const ditherCache = {};
 function dimDither(level, col = '#181425', x = 0, y = 0, w = W, h = H) {     // pixel-art transparency: a checker dither instead of an alpha fade
+  if (FX().clean) { ctx.save(); ctx.globalAlpha = Math.min(0.92, level * 0.22); ctx.fillStyle = col; ctx.fillRect(x, y, w, h); ctx.restore(); return; }
   const key = level + col; let pat = ditherCache[key];
   if (!pat) { const c = document.createElement('canvas'); c.width = c.height = 8; const q = c.getContext('2d'); q.fillStyle = col; for (let cy = 0; cy < 4; cy++) for (let cx = 0; cx < 4; cx++) if (BAYER[cy * 4 + cx] < level * 4) q.fillRect(cx * 2, cy * 2, 2, 2); pat = ctx.createPattern(c, 'repeat'); ditherCache[key] = pat; }
   ctx.fillStyle = pat; ctx.fillRect(x, y, w, h);
@@ -1706,7 +1720,7 @@ function drawHUD() {
   }
   if (!FE) text(fmt(run.maxM) + ' m', 14, 40, 26, PXC.white, 'left');
   if (FX().scrap) text('⚙ ' + run.scrap, W - 14, 38, 16, PXC.yellow, 'right');
-  text('best ' + fmt(save.best) + ' m', W - 14, 58, 12, PXC.ice, 'right');
+  if (!FX().launch || save.best > 0) text('best ' + fmt(save.best) + ' m', W - 14, 58, 12, PXC.ice, 'right');
   const yo = FX().health ? (FE ? 6 : 22) : 0;
   if (FX().health) for (let i = 0; i < run.maxHp; i++) drawHeartPx(14 + i * 26, FE ? 42 : 56, 3, i < run.hp ? '#e43b44' : '#3a4466', i < run.hp ? '#f6757a' : null);
   if (run.shields) text('🛡 ' + run.shields, 14, 64 + yo, 15, PXC.cyan, 'left');
@@ -1741,7 +1755,7 @@ function drawHUD() {
   if (!run.started) {
     panel(40, H / 2 + 52, W - 80, 92, { fill: PXC.navy });
     text('TAP TO FLAP', W / 2, H / 2 + 80, 24, PXC.white);
-    text('FLY THROUGH THE GAPS, STOMP DRONES FROM ABOVE', W / 2, H / 2 + 108, 11, PXC.ice);
+    text(FX().launch ? 'FLY THROUGH GAPS, STOMP DRONES' : 'FLY THROUGH THE GAPS, STOMP DRONES FROM ABOVE', W / 2, H / 2 + 108, 11, PXC.ice);
     text('SPACE / CLICK / TAP', W / 2, H / 2 + 128, 11, PXC.mist);
   }
 }
@@ -1769,9 +1783,9 @@ function drawEnd() {
   dimDither(3);
   const v = run.victory, G = FX().guardians, PO = !!FX().polish;
   const kk = PO ? Math.min(1, (performance.now() - deadAt) / 1000) : 1, ez = 1 - Math.pow(1 - kk, 3);
-  panel(14, 24, W - 28, 568);
   if (PO && run.newBest) { const tt = performance.now() / 1000; for (let i = 0; i < 44; i++) { ctx.fillStyle = [PXC.yellow, PXC.red, PXC.cyan, PXC.green, PXC.pink][i % 5]; ctx.fillRect(Math.round(((i * 53) % W + Math.sin(tt * 2 + i) * 16) / 4) * 4, Math.round((((tt * 70 + i * 37) % (H + 30)) - 10) / 4) * 4, 8, 8); } }
-  pixTextDraw(v ? 'YOU MADE IT!' : 'RUN OVER', W / 2, 68, 34, v ? PXC.yellow : PXC.orange, 'center', PXC.ink);
+  panel(14, 24, W - 28, 568);
+  pixTextDraw(v ? 'YOU MADE IT!' : 'RUN OVER', W / 2, 68, v && FX().launch ? 28 : 34, v ? PXC.yellow : PXC.orange, 'center', PXC.ink);
   text(`${dailyMode ? 'DAILY #' + dayNumber() + ' - ' : ''}${v ? 'YOU BEAT ALL 3 GUARDIANS' : 'ENDED BY ' + run.killer}`, W / 2, 106, 12, PXC.ice);
   text(`${fmt(run.maxM * ez)} m`, W / 2, 150, 42, PXC.white);
   text(run.newBest ? 'NEW BEST!' : `BEST ${fmt(save.best)} M`, W / 2, 184, 14, run.newBest ? PXC.cyan : PXC.mist);
@@ -1835,8 +1849,8 @@ function drawShopScene(t) {
   ctx.fillStyle = '#733e39'; ctx.fillRect(0, 188, W, 44); ctx.fillStyle = '#3e2731'; for (let x = 24; x < W; x += 72) ctx.fillRect(x, 196, 48, 28);
   ctx.fillStyle = '#8b9bb4'; ctx.fillRect(kx - 8, 160, 20, 14); ctx.fillRect(kx + 56, 160, 20, 14);   // paws on the counter
   // speech bubble
-  const sw = tw(shopMsg.txt, 11) + 20; ctx.fillStyle = '#181425'; ctx.fillRect(kx - sw - 6, 66, sw + 4, 28); ctx.fillStyle = '#ffffff'; ctx.fillRect(kx - sw - 4, 68, sw, 24); ctx.fillRect(kx - 8, 76, 8, 6);
-  text(shopMsg.txt, kx - sw / 2 - 4, 80, 11, PXC.ink);
+  const sw = tw(shopMsg.txt, 14) + 20; ctx.fillStyle = '#181425'; ctx.fillRect(kx - sw - 6, 66, sw + 4, 28); ctx.fillStyle = '#ffffff'; ctx.fillRect(kx - sw - 4, 68, sw, 24); ctx.fillRect(kx - 8, 76, 8, 6);
+  text(shopMsg.txt, kx - sw / 2 - 4, 80, 14, PXC.ink);
   // Rivet on a cushion, wearing the current look
   ctx.fillStyle = '#181425'; ctx.fillRect(132, 160, 104, 16); ctx.fillStyle = '#b55088'; ctx.fillRect(136, 160, 96, 12); ctx.fillStyle = '#f6757a'; ctx.fillRect(136, 160, 96, 4);
   if (rivetOk) { ctx.save(); ctx.translate(184, 130 + Math.round(Math.sin(t * 3) * 1) * 4); drawRivetSprite(0, 0, Math.floor(t * 10) % 8, 0, false, false, 1); ctx.restore(); }
@@ -1930,7 +1944,7 @@ function drawTitle() {
   const t = performance.now() / 1000, V = VERS[ver - 1];
   inWorld = true; drawMini(ver, t, 0, 0, W, H); inWorld = false; pixelate(0, 0, W, H, FX().clean ? 3 : 4); flushText();
   dimDither(1);
-  if (FX().feel && rivetOk) { ctx.save(); ctx.translate(W / 2, 258 + Math.round(Math.sin(t * 2.4) * 2) * 3); ctx.scale(1.5, 1.5); drawRivetSprite(0, 0, Math.floor(t * 12) % 8, 0, false, false, 1); ctx.restore(); }
+  if (FX().feel && rivetOk) { ctx.save(); ctx.translate(W / 2, 264 + Math.round(Math.sin(t * 2.4) * 2) * 3); ctx.scale(1.5, 1.5); drawRivetSprite(0, 0, Math.floor(t * 12) % 8, 0, false, false, 1); ctx.restore(); }
   pixTextDraw('FLAPOCALYPSE', W / 2, 150, 40, PXC.yellow, 'center', PXC.ink);
   panel(W / 2 - 112, 190, 224, 34);
   text(`V${V.v} · ${V.name}`, W / 2, 207, 14, PXC.yellow);
@@ -1939,7 +1953,7 @@ function drawTitle() {
   btn('UPDATES', 60, FX().workshop ? 448 : 384, 280, 48, () => { pv = ver; cmp = 0.5; state = 'updates'; }, { color: '#7a4fe0', size: 18 });
   muteBtn(W - 36, 34);
   panel(20, H - 44, W - 40, 28, { fill: PXC.navy });
-  text(`${LATEST} UPDATES SO FAR. SEE WHAT CHANGED IN EACH.`, W / 2, H - 30, 11, PXC.ice);
+  text(FX().launch ? (save.best ? `BEST ${fmt(save.best)} M   ⚙ ${fmt(save.scrap)}   ${save.summits ? 'SUMMITS ' + save.summits : 'REACH 3,000 M!'}` : 'ONE TAP. ONE MAP. REACH THE SUMMIT!') : `${LATEST} UPDATES SO FAR. SEE WHAT CHANGED IN EACH.`, W / 2, H - 30, 11, PXC.ice);
 }
 function drawUpdates() {
   const t = performance.now() / 1000, P = PREV, V = VERS[pv - 1];
@@ -1960,9 +1974,9 @@ function drawUpdates() {
     panel(P.x + 10, P.y + 10, 88, 26, { fill: PXC.ink, hi: PXC.ink }); text('V1.0 BASE', P.x + 54, P.y + 23, 11, PXC.white);
     panel(P.x + P.w - 74, P.y + 10, 64, 26, { fill: PXC.ink, hi: PXC.ink }); text(`V${V.v}`, P.x + P.w - 42, P.y + 23, 11, PXC.yellow);
   }
-  const cw = 38, gap = 4, x0 = (W - (9 * cw + 8 * gap)) / 2;
+  const cw = 34, gap = 4, x0 = (W - (10 * cw + 9 * gap)) / 2;
   for (let i = 1; i <= LATEST; i++) {
-    const cx = x0 + ((i - 1) % 9) * (cw + gap), cy = i <= 9 ? 372 : 404, sel = i === pv;
+    const cx = x0 + ((i - 1) % 10) * (cw + gap), cy = i <= 10 ? 372 : 404, sel = i === pv;
     btn(VERS[i - 1].v, cx, cy, cw, 28, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 12 });
   }
   panel(20, 438, 360, 142);
@@ -2007,6 +2021,7 @@ function renderInner() {
 }
 
 function render() {
+  fitCanvas(); ctx.setTransform(K, 0, 0, K, 0, 0); ctx.imageSmoothingEnabled = false;
   renderInner();
   if (state === 'play' && (paused || resumeT > 0)) {
     pixText = true; dimDither(3);
