@@ -58,7 +58,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -94,6 +94,8 @@ const VERS = [
     notes: ['Grab a bubble: a random power rolls in', 'No pause, no menu, you keep flying', 'A banner tells you what you got', 'Guardians drop two powers at once', 'Salvage 3: bubbles give two powers'] },
   { v: '1.16', name: 'Clean Up', sum: 'Calmer art, real music, sizes that fit.', visual: 'Clean pixels, chiptunes',
     notes: ['One pixel size for the whole world', 'No more dither noise: flat, calm skies', 'Background pushed back so pipes pop', 'A real chiptune soundtrack, one per zone', 'Boss, fever and menu music too'] },
+  { v: '1.17', name: 'The Garage', sum: 'A cute pixel shop, coin paths, new songs.', visual: 'Shop, skins, hats, coin paths',
+    notes: ['A cute pixel shop with a robot keeper', 'Buy colours and hats, dress up Rivet', 'Coins now trace the path between pipes', 'Catchier songs with echo and drum fills', 'Six colours, five hats, more to come'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -104,10 +106,10 @@ const FX = () => VERS[ver - 1].f;
 const saveKey = () => 'flapocalypse.v3' + (ver === LATEST ? '' : '.ver' + ver);
 let save;
 function loadSave() {
-  save = { scrap: 0, best: 0, runs: 0, summits: 0, tier: { hull: 0, wing: 0, salv: 0 }, beaten: {}, cannon: {}, startAlt: 0, daily: null, seen: {} };
+  save = { scrap: 0, best: 0, runs: 0, summits: 0, tier: { hull: 0, wing: 0, salv: 0 }, beaten: {}, cannon: {}, startAlt: 0, daily: null, seen: {}, looks: { skins: { classic: 1 }, hats: { none: 1 }, skin: 'classic', hat: 'none' } };
   try {
     const s = JSON.parse(localStorage.getItem(saveKey()) || '{}');
-    Object.assign(save, s); save.tier = Object.assign({ hull: 0, wing: 0, salv: 0 }, s.tier);
+    Object.assign(save, s); save.tier = Object.assign({ hull: 0, wing: 0, salv: 0 }, s.tier); save.looks = Object.assign({ skins: { classic: 1 }, hats: { none: 1 }, skin: 'classic', hat: 'none' }, s.looks || {});
     save.beaten = s.beaten || {}; save.cannon = s.cannon || {}; save.seen = s.seen || {};
   } catch (e) {}
 }
@@ -240,6 +242,60 @@ const SONGS = {
   boss:  { bpm: 152, key: 0,  ch: [0, 1, 0, -2], mel: [3, 0], drums: 3, lead: 0.05 },
   end:   { bpm: 84,  key: -5, ch: [0, 8, 5, 7],  mel: [2, 2], drums: 0, lead: 0.03 },
 };
+const MEL2 = [
+  '8.8.7.5-' + '6.6.5.4-' + '5.5.4.3-' + '4.3.2.5-',   // 0 junkyard hook
+  '1.3.5.8.' + '7.5.3.1.' + '1.3.5.8.' + '9-8-7---',   // 1 junkyard answer
+  '1-1-3-5.' + '4-4-6-8.' + '8-7-6-5-' + '7---5---',   // 2 smog hook
+  '5.5.6.5.' + '3.3.4.3.' + '1.1.3.5.' + '7.6.5.4.',   // 3 smog answer
+  '8.7.6.5.' + '7.6.5.4.' + '6.5.4.3.' + '5---4-3-',   // 4 rust hook
+  '1.1.8.1.' + '2.2.7.2.' + '3.3.6.3.' + '5.5.4.3.',   // 5 rust answer
+  '13538535' + '64648646' + '75757975' + '5-4-3-2-',   // 6 storm hook
+  '8---7---' + '6---5---' + '4-5-6-7-' + '8-------',   // 7 storm answer
+  '5-5-8-7-' + '6-5-4---' + '3-3-5-4-' + '3-2-1---',   // 8 summit hook
+  '8-9-8-7-' + '6-7-6-5-' + '4-5-4-3-' + '2-3-5---',   // 9 summit answer
+  '1.1.2.1.' + '7.1.2.3.' + '1.1.2.1.' + '5.4.3.2.',   // 10 boss hook
+  '8.8.9.8.' + '7.8.9.8.' + '5.5.6.5.' + '4.3.2.1.',   // 11 boss answer
+  '3---5---' + '1---3---' + '5---8---' + '7-------',   // 12 menu
+  '8-7-5-3-' + '6-5-4-3-' + '5-4-3-2-' + '1-------',   // 13 menu answer
+  '5---3---' + '4---2---' + '3---1---' + '2-------',   // 14 end
+];
+const SONGS2 = {
+  menu: { bpm: 100, key: -3, ch: [0, 8, 3, 10], form: [12, 12, 13, 12], drums: 0, lead: 0.04, wave: 'triangle' },
+  z0:   { bpm: 120, key: 0,  ch: [0, 8, 3, 10], form: [0, 0, 1, 0],     drums: 1, lead: 0.042, wave: 'square' },
+  z1:   { bpm: 126, key: 2,  ch: [0, 5, 8, 7],  form: [2, 2, 3, 2],     drums: 1, lead: 0.042, wave: 'square' },
+  z2:   { bpm: 132, key: -2, ch: [0, 10, 8, 7], form: [4, 4, 5, 4],     drums: 2, lead: 0.042, wave: 'square' },
+  z3:   { bpm: 140, key: 3,  ch: [0, 8, 10, 7], form: [6, 6, 7, 6],     drums: 2, lead: 0.038, wave: 'square' },
+  z4:   { bpm: 136, key: 5,  ch: [0, 8, 3, 10], form: [8, 8, 9, 8],     drums: 2, lead: 0.045, wave: 'square' },
+  boss: { bpm: 156, key: 0,  ch: [0, 1, 0, -2], form: [10, 10, 11, 10], drums: 3, lead: 0.03, wave: 'sawtooth' },
+  end:  { bpm: 84,  key: -5, ch: [0, 8, 5, 7],  form: [14, 14, 13, 14], drums: 0, lead: 0.035, wave: 'triangle' },
+};
+let MECHO = null;
+function mecho() { if (!MECHO) { const d = AC.createDelay(1), fb = AC.createGain(), g = AC.createGain(); d.delayTime.value = 0.27; fb.gain.value = 0.28; g.gain.value = 0.35; d.connect(fb); fb.connect(d); d.connect(g); g.connect(mbus()); MECHO = d; } return MECHO; }
+function mLead(t, f, dur, type, vol) { const o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (dur > 0.25) { const lfo = AC.createOscillator(), lg = AC.createGain(); lfo.frequency.value = 6; lg.gain.value = f * 0.012; lfo.connect(lg); lg.connect(o.frequency); lfo.start(t + 0.12); lfo.stop(t + dur + 0.02); } g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.008); g.gain.setValueAtTime(vol * 0.8, t + dur * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(mbus()); g.connect(mecho()); o.start(t); o.stop(t + dur + 0.02); }
+function playStep2(S, s, t, dur) {
+  const fever = state === 'play' && run && run.feverT > 0, bar = Math.floor(s / 16) % 4, sec = Math.floor(s / 64) % 4, i = s % 16, c = S.ch[bar] + S.key;
+  const minor = [0, 5, 7].includes(S.ch[bar]), tri = minor ? [0, 3, 7, 12] : [0, 4, 7, 12];
+  const bassPat = S.drums >= 2 ? [0, 2, 4, 6, 8, 10, 12, 14] : [0, 3, 6, 8, 11, 14];
+  if (bassPat.includes(i)) { const f = 110 * Math.pow(2, (c - 12 + (i % 4 === 2 ? 12 : 0)) / 12); mNote(t, f, dur * 1.8, 'triangle', 0.17); mNote(t, f * 2, dur * 0.9, 'square', 0.022); }
+  if (sec === 2 || S.drums >= 2) mNote(t, 440 * Math.pow(2, (c + tri[[0, 1, 2, 3, 2, 1][s % 6]] - 12 + (fever ? 12 : 0)) / 12), dur * 0.7, 'square', 0.013);
+  if (s % 2 === 0) {
+    const mel = MEL2[S.form[sec]], k = Math.floor(s / 2) % 32, ch = mel[k];
+    if (ch !== '.' && ch !== '-') {
+      let hold = 1; while (mel[(k + hold) % 32] === '-' && hold < 8) hold++;
+      const f = 440 * Math.pow(2, (S.key + SCALE[+ch]) / 12); mLead(t, f, dur * 2 * hold * 0.9, S.wave, S.lead);
+      if (sec === 2) mNote(t, f / 2, dur * 2 * hold * 0.8, 'triangle', 0.03);       // the B section gets a low harmony
+      if (fever) mNote(t, f * 2, dur * 1.6, 'triangle', 0.02);
+    }
+  }
+  if (S.drums) {
+    const fill = bar === 3 && i >= 12 && sec % 2 === 1;
+    if (i === 0 || i === 8 || (S.drums >= 2 && i === 10) || (S.drums >= 3 && (i === 4 || i === 12))) mKick(t, 0.5);
+    if (fill) mNoise(t, 0.09, 0.1, 1200 + (i - 12) * 400);
+    else if (i === 4 || i === 12) mNoise(t, 0.13, 0.12, 1400);
+    if (s % 2 === 0) mNoise(t, i % 4 === 2 ? 0.08 : 0.03, 0.035, 7000);
+    if (s % 64 === 0) mNoise(t, 0.6, 0.05, 5000);            // a crash at the top of each section
+  } else if (i === 0) mKick(t, 0.2);
+}
 function songNow() {
   if (state === 'play' && run) return run.fight ? 'boss' : 'z' + zoneOf(mOf());
   if (state === 'pick' && run) return 'z' + zoneOf(mOf());
@@ -263,11 +319,11 @@ function playStep(S, s, t, dur) {
 }
 function musicTick() {
   if (!AC || muted || !FX().clean || AC.state !== 'running') return;
-  const name = songNow(), S = SONGS[name];
+  const name = songNow(), S2 = !!FX().songs2, S = (S2 ? SONGS2 : SONGS)[name];
   if (name !== MUS.song) { MUS.song = name; MUS.step = 0; MUS.next = AC.currentTime + 0.06; }
   if (MUS.next < AC.currentTime) MUS.next = AC.currentTime + 0.03;
   const fever = state === 'play' && run && run.feverT > 0, dur = 60 / (S.bpm * (fever ? 1.12 : 1)) / 4;
-  while (MUS.next < AC.currentTime + 0.14) { playStep(S, MUS.step, MUS.next, dur); MUS.next += dur; MUS.step++; }
+  while (MUS.next < AC.currentTime + 0.14) { (S2 ? playStep2 : playStep)(S, MUS.step, MUS.next, dur); MUS.next += dur; MUS.step++; }
 }
 
 // ---------- Derived stats ----------
@@ -355,7 +411,17 @@ function addPipe() {
   if (roll < 0.34) { if (FX().drones) run.drones.push({ x: midX, y0: grng(130, VH - 130), amp: grng(20, 70), ph: grng(0, 6.28), spd: grng(1.2, 2.2), dead: false, y: VH / 2 }); }
   else if (roll < 0.56 && z >= 2) run.gears.push({ x: midX, y0: grng(170, VH - 170), amp: grng(60, 130), ph: grng(0, 6.28), spd: grng(1.4, 2.4), a: 0, y: VH / 2 });
   else if (roll < 0.62) { if (FX().pads) run.pads.push({ x: midX, y: grng(150, VH - 150), got: false }); }
-  if (FX().wide) {
+  if (FX().coins2) {
+    const prev = run.pipes[run.pipes.length - 2];
+    const ctr = q => { const gs = gapsOf(q), g = q.kind === 'cheese' ? gs[1] : gs[gs.length - 1]; return (g[0] + g[1]) / 2; };
+    if (FX().scrap && prev && gc > 0 && seedRand() < 0.85) {          // a coin path from the last gap to this one: fly well, get paid
+      const yA = ctr(prev), yB = ctr(p), x0 = prev.x + prev.w + 24, x1 = p.x - 24, n = Math.max(3, Math.floor((x1 - x0) / 40) + 1), hop = Math.abs(yA - yB) < 70 ? 34 : 0;
+      for (let k = 0; k < n; k++) { const f = k / (n - 1); run.scraps.push({ x: x0 + (x1 - x0) * f, y: yA + (yB - yA) * f - Math.sin(f * Math.PI) * hop, r: 12, v: 1 }); }
+      if (gc % 7 === 3) run.scraps.push({ x: (x0 + x1) / 2, y: (yA + yB) / 2 - hop - 40, r: 13, v: 5 });
+    }
+    if (FX().scrap && (p.kind === 'normal' || p.kind === 'spring' || p.kind === 'pinch')) run.scraps.push({ x: p.x + p.w / 2, y: gy, r: 12, v: 1 });
+  }
+  else if (FX().wide) {
     if (FX().scrap && gc > 0) {
       const still = p.kind === 'normal' || p.kind === 'spring' || p.kind === 'pinch';
       if (seedRand() < 0.4) { const xs = still ? [-56, 29, 114] : [-60, 118]; xs.forEach(o => run.scraps.push({ x: p.x + o, y: still ? gy : p.gy, r: 12, v: 1 })); }   // a trail through the gap
@@ -893,13 +959,56 @@ function rivetCell(since, t, row) {
   if (row === 0) return [Math.floor(t * 5) % 4, 1];                              // level glide
   return [4 + Math.floor(t * 6) % 3, row];                                       // wings held out while tilted
 }
-function drawRivetSprite(x, y, col, row, fever, shield, alpha, flipY) {
+// ---------- Looks: colour swaps of the SpriteKiln atlas, plus pixel hats ----------
+const SKIN_SRC = { body: ['#3a4766', '#65779c', '#a2b2d0', '#dbe5f5'], plate: ['#2c3550', '#4b5b82', '#7d8fb8', '#aebddb'], wing: ['#8a2c0c', '#d9531a', '#ff8a2e', '#ffc260'] };
+const SKINS = [
+  { id: 'classic',  name: 'Classic',    cost: 0 },
+  { id: 'gold',     name: 'Gold Rush',  cost: 300, body: ['#b86f50', '#d77643', '#feae34', '#fee761'], plate: ['#733e39', '#b86f50', '#e4a672', '#ead4aa'], wing: ['#124e89', '#0099db', '#2ce8f5', '#ffffff'] },
+  { id: 'mint',     name: 'Mint Chip',  cost: 200, body: ['#265c42', '#3e8948', '#63c74d', '#ead4aa'], plate: ['#193c3e', '#265c42', '#3e8948', '#63c74d'], wing: ['#a22633', '#e43b44', '#f6757a', '#e8b796'] },
+  { id: 'gum',      name: 'Bubblegum',  cost: 250, body: ['#68386c', '#b55088', '#f6757a', '#e8b796'], plate: ['#3e2731', '#68386c', '#b55088', '#f6757a'], wing: ['#124e89', '#0099db', '#2ce8f5', '#ffffff'] },
+  { id: 'night',    name: 'Midnight',   cost: 400, body: ['#181425', '#262b44', '#3a4466', '#5a6988'], plate: ['#181425', '#181425', '#262b44', '#3a4466'], wing: ['#68386c', '#b55088', '#f6757a', '#ffffff'] },
+  { id: 'lava',     name: 'Lava Lamp',  cost: 600, body: ['#3e2731', '#733e39', '#a22633', '#e43b44'], plate: ['#181425', '#3e2731', '#733e39', '#a22633'], wing: ['#be4a2f', '#f77622', '#feae34', '#fee761'] },
+];
+const HATS = [
+  { id: 'none',  name: 'No Hat',     cost: 0 },
+  { id: 'party', name: 'Party Hat',  cost: 120, rows: ['...W...', '...P...', '..PYP..', '..YPY..', '.PYPYP.', 'PPPPPPP'] },
+  { id: 'prop',  name: 'Propeller',  cost: 180, rows: ['YYYKBBB', '...K...', '.RRRRR.', 'RRRRRRR'], rows2: ['..YKB..', '...K...', '.RRRRR.', 'RRRRRRR'] },
+  { id: 'top',   name: 'Top Hat',    cost: 250, rows: ['.KKKKK.', '.KKKKK.', '.KKKKK.', '.RRRRR.', 'KKKKKKK'] },
+  { id: 'shades', name: 'Cool Shades', cost: 150, eye: true, rows: ['KKKKKK', '.KK.KK'] },
+  { id: 'crown', name: 'Crown',      cost: 500, rows: ['Y.Y.Y.Y', 'YYYYYYY', 'YRYBYRY', 'YYYYYYY'] },
+];
+const HATPAL = { Y: '#feae34', R: '#e43b44', B: '#0099db', K: '#181425', W: '#ffffff', P: '#b55088' };
+const ROW_ANG = [0, 0, -0.6, -0.3, 0.3, 0.6, 0.9];
+const skinCache = {};
+function skinAtlas(id) {
+  if (!id || id === 'classic' || !rivetOk) return RIVET;
+  if (skinCache[id]) return skinCache[id];
+  const s = SKINS.find(k => k.id === id); if (!s) return RIVET;
+  try {
+    const c = document.createElement('canvas'); c.width = RIVET.width; c.height = RIVET.height; const x = c.getContext('2d'); x.drawImage(RIVET, 0, 0);
+    const im = x.getImageData(0, 0, c.width, c.height), d = im.data, map = {};
+    for (const k of ['body', 'plate', 'wing']) if (s[k]) SKIN_SRC[k].forEach((h, i) => { map[h] = s[k][i]; });
+    for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; const h = '#' + [d[i], d[i + 1], d[i + 2]].map(v => v.toString(16).padStart(2, '0')).join(''), m = map[h]; if (m) { d[i] = parseInt(m.slice(1, 3), 16); d[i + 1] = parseInt(m.slice(3, 5), 16); d[i + 2] = parseInt(m.slice(5, 7), 16); } }
+    x.putImageData(im, 0, 0); skinCache[id] = c; return c;
+  } catch (e) { return RIVET; }
+}
+function drawHat(id, row, t) {
+  const h = HATS.find(k => k.id === id); if (!h || !h.rows) return;
+  const rows = h.rows2 && Math.floor(t * 12) % 2 ? h.rows2 : h.rows, u = 4;
+  ctx.save(); ctx.rotate(ROW_ANG[row] || 0);
+  const w = rows[0].length * u, x0 = h.eye ? 2 : 2 - w / 2, y0 = h.eye ? -8 : -18 - rows.length * u;
+  for (let r = 0; r < rows.length; r++) for (let q = 0; q < rows[r].length; q++) { const k = rows[r][q]; if (k === '.') continue; ctx.fillStyle = HATPAL[k]; ctx.fillRect(x0 + q * u, y0 + r * u, u, u); }
+  ctx.restore();
+}
+function drawRivetSprite(x, y, col, row, fever, shield, alpha, flipY, skin, hat) {
+  const SH = FX().shop; if (skin === undefined) skin = SH ? save.looks.skin : 'classic'; if (hat === undefined) hat = SH ? save.looks.hat : 'none';
   const X = Math.round(x / 4) * 4, Y = Math.round(y / 4) * 4;       // one sprite pixel = one pixel of the 100x160 grid
   ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
   if (fever) { try { ctx.filter = 'hue-rotate(280deg) saturate(1.7) brightness(1.1)'; } catch (e) {} }
   ctx.translate(X, Y); if (flipY) ctx.scale(1, -1);
-  ctx.drawImage(RIVET, col * 32, row * 32, 32, 32, -64, -64, 128, 128);
+  ctx.drawImage(skinAtlas(skin), col * 32, row * 32, 32, 32, -64, -64, 128, 128);
   ctx.filter = 'none';
+  if (hat && hat !== 'none') drawHat(hat, row, performance.now() / 1000);
   if (shield) { ctx.globalAlpha = .9; ctx.strokeStyle = '#6fe3ff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 38, 0, 7); ctx.stroke(); }
   ctx.restore();
 }
@@ -1683,13 +1792,107 @@ function drawEnd() {
   }
   const ok = () => performance.now() - deadAt > 500;
   btn('RUN IT BACK', 50, 384, W - 100, 62, () => { if (ok()) startRun(dailyMode); }, { color: '#e0753a', size: 24 });
-  btn('WORKSHOP', 50, 462, 140, 46, () => { if (ok()) { state = 'menu'; dailyMode = false; } }, { size: 15 });
+  btn(FX().shop ? 'SHOP' : 'WORKSHOP', 50, 462, 140, 46, () => { if (ok()) { state = 'menu'; dailyMode = false; } }, { size: 15 });
   const just = performance.now() - copied < 1800;
   btn(just ? 'COPIED!' : 'SHARE', 210, 462, 140, 46, () => { if (ok()) shareRun(); }, { size: 15, color: '#2f9e5e' });
   btn('TITLE', 50, 522, W - 100, 38, () => { if (ok()) { state = 'title'; dailyMode = false; } }, { size: 14, color: '#2a3350' });
   if (just) text('RESULT COPIED - PASTE IT ANYWHERE', W / 2, 574, 11, PXC.cyan);
 }
+let shopTab = 'up', lookTab = 'skin', shopMsg = { txt: 'WELCOME IN!', t: 0 };
+function shopSay(s) { shopMsg = { txt: s, t: performance.now() }; }
+function coinIcon(x, y, u = 3) { ctx.fillStyle = '#181425'; ctx.fillRect(x - u, y, u * 6, u * 6); ctx.fillRect(x, y - u, u * 4, u * 8); ctx.fillStyle = '#feae34'; ctx.fillRect(x, y, u * 4, u * 6); ctx.fillStyle = '#fee761'; ctx.fillRect(x + u, y + u, u, u * 4); ctx.fillStyle = '#be4a2f'; ctx.fillRect(x + u * 2, y + u, u, u * 4); }
+function drawShopScene(t) {
+  // wallpaper, shelves and trinkets
+  for (let x = 0; x < W; x += 16) { ctx.fillStyle = (x / 16) % 2 ? '#c28569' : '#b86f50'; ctx.fillRect(x, 0, 16, 176); }
+  ctx.fillStyle = '#733e39'; ctx.fillRect(0, 160, W, 16);
+  for (const sy of [92, 132]) { ctx.fillStyle = '#3e2731'; ctx.fillRect(12, sy + 8, 160, 4); ctx.fillStyle = '#733e39'; ctx.fillRect(12, sy, 160, 8); ctx.fillStyle = '#e4a672'; ctx.fillRect(12, sy, 160, 4); }
+  const jar = (x, y, c) => { ctx.fillStyle = '#181425'; ctx.fillRect(x - 2, y - 26, 24, 28); ctx.fillStyle = '#2ce8f5'; ctx.fillRect(x, y - 24, 20, 24); ctx.fillStyle = c; ctx.fillRect(x + 4, y - 12, 12, 12); ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 2, y - 22, 4, 8); ctx.fillStyle = '#733e39'; ctx.fillRect(x - 2, y - 30, 24, 6); };
+  jar(20, 92, '#feae34'); jar(52, 92, '#e43b44'); coinIcon(96, 70, 3); coinIcon(118, 70, 3); coinIcon(107, 58, 3);
+  ctx.fillStyle = '#181425'; ctx.fillRect(140, 62, 28, 30); ctx.fillStyle = '#8b9bb4'; ctx.fillRect(144, 66, 20, 22); ctx.fillStyle = '#c0cbdc'; ctx.fillRect(148, 70, 12, 4);   // toolbox
+  const g = Math.floor(t * 4) % 2; ctx.fillStyle = '#5a6988'; ctx.fillRect(28, 112, 20, 20); ctx.fillRect(g ? 24 : 34, g ? 118 : 108, g ? 28 : 8, g ? 8 : 28); ctx.fillStyle = '#181425'; ctx.fillRect(34, 118, 8, 8);   // spinning gear
+  ctx.fillStyle = '#181425'; ctx.fillRect(64, 104, 18, 28); ctx.fillStyle = '#b55088'; ctx.fillRect(66, 112, 14, 20); ctx.fillStyle = '#f6757a'; ctx.fillRect(68, 114, 4, 8); ctx.fillStyle = '#733e39'; ctx.fillRect(68, 104, 10, 6);   // potion
+  for (let k = 0; k < 3; k++) { ctx.fillStyle = ['#e43b44', '#0099db', '#63c74d'][k]; ctx.fillRect(96 + k * 22, 112, 18, 20); ctx.fillStyle = '#ffffff'; ctx.fillRect(100 + k * 22, 116, 10, 4); }   // paint tins
+  // hanging sign with blinking bulbs
+  ctx.fillStyle = '#3e2731'; ctx.fillRect(130, 0, 4, 14); ctx.fillRect(266, 0, 4, 14);
+  ctx.fillStyle = '#181425'; ctx.fillRect(96, 12, 208, 44); ctx.fillStyle = '#733e39'; ctx.fillRect(100, 16, 200, 36); ctx.fillStyle = '#3e2731'; ctx.fillRect(106, 22, 188, 24);
+  text("RIVET'S GARAGE", W / 2, 34, 14, PXC.yellow);
+  for (let k = 0; k < 12; k++) { ctx.fillStyle = (k + Math.floor(t * 3)) % 2 ? '#fee761' : '#e43b44'; ctx.fillRect(104 + k * 16, 52, 8, 6); }
+  // the shopkeeper: a boxy robot cat with a screen face
+  const kx = 300, ky = 84 + Math.round(Math.sin(t * 2) * 1) * 4, blink = (t % 3.4) > 3.25, happy = performance.now() - shopMsg.t < 1400 && shopMsg.good;
+  ctx.fillStyle = '#181425'; ctx.fillRect(kx - 4, ky - 16, 12, 20); ctx.fillRect(kx + 60, ky - 16, 12, 20); ctx.fillStyle = '#8b9bb4'; ctx.fillRect(kx, ky - 12, 4, 16); ctx.fillRect(kx + 64, ky - 12, 4, 16);   // ears
+  ctx.fillStyle = '#181425'; ctx.fillRect(kx + 30, ky - 28, 8, 20); ctx.fillStyle = Math.floor(t * 2) % 2 ? '#e43b44' : '#fee761'; ctx.fillRect(kx + 28, ky - 34, 12, 8);   // antenna
+  ctx.fillStyle = '#181425'; ctx.fillRect(kx - 8, ky - 4, 84, 64); ctx.fillStyle = '#8b9bb4'; ctx.fillRect(kx - 4, ky, 76, 56); ctx.fillStyle = '#c0cbdc'; ctx.fillRect(kx - 4, ky, 76, 4);
+  ctx.fillStyle = '#181425'; ctx.fillRect(kx + 4, ky + 8, 60, 36); ctx.fillStyle = '#193c3e'; ctx.fillRect(kx + 8, ky + 12, 52, 28);
+  ctx.fillStyle = '#63c74d';
+  if (blink) { ctx.fillRect(kx + 16, ky + 24, 12, 4); ctx.fillRect(kx + 40, ky + 24, 12, 4); }
+  else if (happy) { for (const ex of [kx + 16, kx + 40]) { ctx.fillRect(ex, ky + 24, 4, 4); ctx.fillRect(ex + 4, ky + 20, 4, 4); ctx.fillRect(ex + 8, ky + 24, 4, 4); } }
+  else { ctx.fillRect(kx + 18, ky + 18, 8, 12); ctx.fillRect(kx + 42, ky + 18, 8, 12); }
+  ctx.fillRect(kx + 28, ky + 34, 4, 4); ctx.fillRect(kx + 36, ky + 34, 4, 4); ctx.fillRect(kx + 32, ky + 36, 4, 4);   // little w mouth
+  ctx.fillStyle = '#f6757a'; ctx.fillRect(kx + 8, ky + 32, 8, 4); ctx.fillRect(kx + 52, ky + 32, 8, 4);   // blush
+  ctx.fillStyle = '#5a6988'; ctx.fillRect(kx - 4, ky + 60, 76, 40);
+  // counter
+  ctx.fillStyle = '#181425'; ctx.fillRect(0, 168, W, 64); ctx.fillStyle = '#b86f50'; ctx.fillRect(0, 172, W, 12); ctx.fillStyle = '#e4a672'; ctx.fillRect(0, 172, W, 4);
+  ctx.fillStyle = '#733e39'; ctx.fillRect(0, 188, W, 44); ctx.fillStyle = '#3e2731'; for (let x = 24; x < W; x += 72) ctx.fillRect(x, 196, 48, 28);
+  ctx.fillStyle = '#8b9bb4'; ctx.fillRect(kx - 8, 160, 20, 14); ctx.fillRect(kx + 56, 160, 20, 14);   // paws on the counter
+  // speech bubble
+  const sw = tw(shopMsg.txt, 11) + 20; ctx.fillStyle = '#181425'; ctx.fillRect(kx - sw - 6, 66, sw + 4, 28); ctx.fillStyle = '#ffffff'; ctx.fillRect(kx - sw - 4, 68, sw, 24); ctx.fillRect(kx - 8, 76, 8, 6);
+  text(shopMsg.txt, kx - sw / 2 - 4, 80, 11, PXC.ink);
+  // Rivet on a cushion, wearing the current look
+  ctx.fillStyle = '#181425'; ctx.fillRect(132, 160, 104, 16); ctx.fillStyle = '#b55088'; ctx.fillRect(136, 160, 96, 12); ctx.fillStyle = '#f6757a'; ctx.fillRect(136, 160, 96, 4);
+  if (rivetOk) { ctx.save(); ctx.translate(184, 130 + Math.round(Math.sin(t * 3) * 1) * 4); drawRivetSprite(0, 0, Math.floor(t * 10) % 8, 0, false, false, 1); ctx.restore(); }
+  // wallet
+  panel(8, 6, 84, 30, { fill: PXC.ink }); coinIcon(18, 14, 2); text(fmt(save.scrap), 58, 21, 12, PXC.yellow);
+}
+function drawShop() {
+  const t = performance.now() / 1000;
+  drawShopScene(t);
+  muteBtn(W - 30, 22);
+  ctx.fillStyle = PXC.navy; ctx.fillRect(0, 232, W, H - 232);
+  const tab = (label, id, x) => btn(label, x, 240, 180, 34, () => { shopTab = id; }, { color: shopTab === id ? '#e0753a' : '#2a3350', size: 15 });
+  tab('UPGRADES', 'up', 16); tab('LOOKS', 'look', 204);
+  if (shopTab === 'up') {
+    BRANCHES.forEach((b, i) => {
+      const y = 284 + i * 70, tr = save.tier[b.id], maxed = tr >= 4, cost = TIER_COST[tr], can = !maxed && save.scrap >= cost;
+      panel(16, y, W - 32, 62);
+      text(b.name.toUpperCase(), 28, y + 16, 15, PXC.white, 'left');
+      const px0 = 28 + tw(b.name.toUpperCase(), 15) + 12; for (let k = 0; k < 4; k++) pip(px0 + k * 16, y + 10, k < tr);
+      para(maxed ? 'FULLY UPGRADED' : (FX().luck && b.tiersLuck || b.tiers)[tr], 28, y + 40, 11, PXC.ice, 240, 13);
+      btn(maxed ? 'MAX' : '⚙ ' + fmt(cost), W - 112, y + 11, 86, 40, () => { if (can) { save.scrap -= cost; save.tier[b.id] = tr + 1; persist(); SFX.milestone(); shopSay('THANKS, PAL!'); shopMsg.good = true; } else if (!maxed) shopSay('NEED MORE COINS!'); }, { disabled: !can, color: '#2f9e5e', size: 14 });
+    });
+    const cy = 284 + 3 * 70; panel(16, cy, W - 32, 72);
+    text('SHORTCUT CANNON', 28, cy + 16, 13, PXC.white, 'left');
+    text(FX().guardians ? `START FURTHER (NOW: ${save.startAlt} M)` : 'UNLOCKS WITH GUARDIANS', 28, cy + 32, 11, PXC.mist, 'left');
+    (FX().guardians ? CANNONS : []).forEach((c, i) => {
+      const bx = 26 + i * 178, owned = save.cannon[c.g], unlocked = save.beaten[c.g], sel = save.startAlt === c.alt;
+      btn(owned ? (sel ? `${c.alt} M  ON` : `${c.alt} M`) : (unlocked ? `${c.alt} M  ⚙${fmt(c.cost)}` : `${c.alt} M  LOCKED`), bx, cy + 42, 168, 24, () => {
+        if (owned) { save.startAlt = sel ? 0 : c.alt; persist(); }
+        else if (unlocked && save.scrap >= c.cost) { save.scrap -= c.cost; save.cannon[c.g] = true; save.startAlt = c.alt; persist(); shopSay('BOOM! NEW START'); shopMsg.good = true; }
+      }, { disabled: !owned && (!unlocked || save.scrap < c.cost), color: sel ? '#e0753a' : '#3c6df0', size: 11 });
+    });
+  } else {
+    const sub = (label, id, x) => btn(label, x, 284, 120, 26, () => { lookTab = id; }, { color: lookTab === id ? '#7a4fe0' : '#2a3350', size: 12 });
+    sub('COLOURS', 'skin', 76); sub('HATS', 'hat', 204);
+    const list = lookTab === 'skin' ? SKINS : HATS, L = save.looks;
+    list.forEach((it, i) => {
+      const cx = 16 + (i % 3) * 124, cy = 318 + Math.floor(i / 3) * 128, own = lookTab === 'skin' ? L.skins[it.id] : L.hats[it.id], on = (lookTab === 'skin' ? L.skin : L.hat) === it.id, can = save.scrap >= it.cost;
+      panel(cx, cy, 120, 120, { fill: on ? '#3a4466' : PXC.navy, hi: on ? PXC.yellow : PXC.slate });
+      if (rivetOk) { ctx.save(); ctx.beginPath(); ctx.rect(cx + 2, cy + 2, 116, 80); ctx.clip(); ctx.translate(cx + 60, cy + 50); drawRivetSprite(0, 0, Math.floor(t * 10 + i) % 8, 0, false, false, 1, false, lookTab === 'skin' ? it.id : L.skin, lookTab === 'hat' ? it.id : L.hat); ctx.restore(); }
+      text(it.name.toUpperCase(), cx + 60, cy + 86, 11, PXC.white);
+      const label = on ? 'WEARING' : own ? 'WEAR' : '⚙ ' + fmt(it.cost);
+      btn(label, cx + 10, cy + 94, 100, 20, () => {
+        if (on) return;
+        if (own) { if (lookTab === 'skin') L.skin = it.id; else L.hat = it.id; persist(); shopSay('LOOKING SHARP!'); shopMsg.good = true; }
+        else if (can) { save.scrap -= it.cost; if (lookTab === 'skin') { L.skins[it.id] = 1; L.skin = it.id; } else { L.hats[it.id] = 1; L.hat = it.id; } persist(); SFX.milestone(); shopSay('OOH, NICE PICK!'); shopMsg.good = true; }
+        else shopSay('NEED MORE COINS!');
+      }, { color: on ? '#2a3350' : own ? '#3c6df0' : '#2f9e5e', disabled: !on && !own && !can, size: 11 });
+    });
+  }
+  btn('BACK', 16, 580, 90, 48, () => { state = 'title'; }, { size: 15, color: '#2a3350' });
+  btn('FLAP!', 114, 580, 164, 48, () => startRun(false), { color: '#e0753a', size: 22 });
+  btn('DAILY', 286, 580, 98, 48, () => startRun(true), { color: '#7a4fe0', size: 15 });
+}
 function drawMenu() {
+  if (FX().shop) return drawShop();
   const t = performance.now() / 1000;
   pixBackdrop(0, t); dimDither(2);
   panel(10, 8, W - 20, 66);
@@ -1732,7 +1935,7 @@ function drawTitle() {
   panel(W / 2 - 112, 190, 224, 34);
   text(`V${V.v} · ${V.name}`, W / 2, 207, 14, PXC.yellow);
   btn('PLAY', 60, 300, 280, 66, () => startRun(false), { color: '#e0753a', size: 30 });
-  if (FX().workshop) btn('WORKSHOP', 60, 384, 280, 48, () => { state = 'menu'; }, { color: '#3c6df0', size: 18 });
+  if (FX().workshop) btn(FX().shop ? 'SHOP' : 'WORKSHOP', 60, 384, 280, 48, () => { state = 'menu'; }, { color: '#3c6df0', size: 18 });
   btn('UPDATES', 60, FX().workshop ? 448 : 384, 280, 48, () => { pv = ver; cmp = 0.5; state = 'updates'; }, { color: '#7a4fe0', size: 18 });
   muteBtn(W - 36, 34);
   panel(20, H - 44, W - 40, 28, { fill: PXC.navy });
