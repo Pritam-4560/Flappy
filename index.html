@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -112,6 +112,8 @@ const VERS = [
     notes: ['Every sky alive: clouds, stars, storms', 'Balloons, blimps, gears, turbines, aurora', 'Happy blue skies darken zone by zone', 'Final guardian: a blood-red night', 'See-through pop-ups, glossy new buttons'] },
   { v: '1.20', name: 'Void Cruiser', sum: 'A new look, and a spaceship final boss.', visual: 'Layered skies, alien warship',
     notes: ['Final boss: the Void Cruiser spaceship', 'It hunts your lane, charges and fires', 'New art: clean layered parallax skies', 'Depth haze, rim light, hero animations', 'The ship explodes when you win'] },
+  { v: '1.21', name: 'How To Play', sum: 'A hands-on tutorial. Pickups never overlap.', visual: 'Guided tutorial, tidy pickups',
+    notes: ['A step-by-step tutorial that pauses and points', 'A hand and spotlight show you each thing', 'Covers pipes, coins, drones, powers, fever', 'Coins and powers never overlap or hide', 'Find it on the title: HOW TO PLAY'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -371,6 +373,114 @@ function newRun() {
   };
   genPipes();
 }
+// ---------- 1.21: pickups never overlap each other, hazards or pipe walls ----------
+function tidySpawns(x0) {
+  const items = [], inR = o => o.x >= x0;
+  run.bubbles.filter(inR).forEach(o => items.push({ o, x: o.x, y: o.p.gy, r: 32, pri: 9, list: 'bubbles', own: o.p }));
+  run.drones.filter(inR).forEach(o => items.push({ o, x: o.x, y: o.y0, r: 24, amp: o.amp || 0, pri: 8, hazard: true }));
+  run.gears.filter(inR).forEach(o => items.push({ o, x: o.x, y: o.y0, r: 30, amp: o.amp || 0, pri: 8, hazard: true }));
+  run.hearts.filter(inR).forEach(o => items.push({ o, x: o.x, y: o.y, r: 26, pri: 6, list: 'hearts' }));
+  run.pads.filter(inR).forEach(o => items.push({ o, x: o.x, y: o.y, r: 28, pri: 5, list: 'pads' }));
+  run.scraps.filter(inR).forEach(o => items.push({ o, x: o.x, y: o.y, r: (o.r || 10) + 4, pri: o.v >= 5 ? 3 : o.risky ? 1 : 2, list: 'scraps', coin: true }));
+  items.sort((a, b) => b.pri - a.pri);
+  const kept = [], drop = new Set(), floor = VH - groundH() - 12;
+  for (const it of items) {
+    if (!it.hazard && it.y + it.r > floor) { it.y = it.o.y = floor - it.r; }
+    let bad = false;
+    for (const k of kept) {
+      const dx = Math.abs(it.x - k.x), dy = Math.abs(it.y - k.y) - (k.amp || 0) - (it.amp || 0);
+      const need = it.coin && k.coin ? 22 : it.r + k.r + 18;                 // coins may sit in a row; everything else keeps a clear ring
+      if (dx < need && dy < need) { bad = true; break; }
+    }
+    if (!bad && !it.hazard) for (const p of run.pipes) {
+      if (it.own === p || it.x < p.x - it.r - 6 || it.x > p.x + p.w + it.r + 6) continue;
+      const moving = p.amp > 0 || ['slider', 'shutter', 'pinch'].includes(p.kind);
+      if (moving) { bad = true; break; }
+      const gs = gapsOf({ ...p, cy: p.gy, gap: p.base });
+      if (!gs.some(g => it.y - it.r >= g[0] + 8 && it.y + it.r <= g[1] - 8)) { bad = true; break; }
+    }
+    if (bad) drop.add(it.o); else kept.push(it);
+  }
+  if (drop.size) for (const L of ['bubbles', 'hearts', 'pads', 'scraps', 'drones', 'gears']) run[L] = run[L].filter(o => !drop.has(o) || o.tut);
+}
+
+// ---------- 1.21: a hands-on tutorial that pauses the game and walks you through every idea ----------
+function startTutorial() {
+  startRun(false);
+  const r = run, x0 = r.dist + 520, mid = VH / 2 - 40, P = (x, gy, kind = 'normal', extra = {}) => { const p = { x, w: 60, gy, base: 250, amp: 0, ph: 0, spd: 1, z: 0, passed: false, minEdge: 99, cy: gy, gap: 250, kind, ...extra }; r.pipes.push(p); return p; };
+  r.pipes = []; r.scraps = []; r.drones = []; r.gears = []; r.pads = []; r.bubbles = []; r.hearts = []; r.gates = []; r.bolts = [];
+  r.genX = 1e12; r.gi = -1; r.nextBubble = 1e9; r.shields = 0;
+  const p1 = P(x0, mid);
+  for (let k = 0; k < 5; k++) r.scraps.push({ x: x0 + 140 + k * 44, y: mid - Math.sin(k / 4 * Math.PI) * 40, r: 12, v: 1 });
+  const p2 = P(x0 + 480, mid + 40);
+  const dr = { x: x0 + 720, y0: mid + 70, amp: 0, ph: 0, spd: 1, dead: false, y: mid + 70 }; r.drones.push(dr);
+  const p3 = P(x0 + 960, mid); const bu = { x: x0 + 990, p: p3, got: false }; r.bubbles.push(bu);
+  const ht = { x: x0 + 1200, y: mid, got: false }; r.hearts.push(ht);
+  const p4 = P(x0 + 1440, mid, 'slider', { amp: 70, spd: 1.1, ph: 0 });
+  const pd = { x: x0 + 1700, y: mid, got: false }; r.pads.push(pd);
+  r.tut = { i: 0, pause: null, done: {}, objs: { p1, p2, dr, p3, bu, ht, p4, pd }, after: 0 };
+}
+const TUT_STEPS = [
+  { id: 'tap',    msg: ['TAP TO FLAP!', 'EVERY TAP GIVES RIVET A LITTLE LIFT'], at: r => !r.started, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
+  { id: 'air',    msg: ['KEEP TAPPING TO STAY UP', "DON'T FALL ON THE GROUND"], at: r => r.started && r.t > 0.8, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
+  { id: 'pipe',   msg: ['FLY THROUGH THE GAP', 'TOUCHING A PIPE COSTS A HEART'], obj: 'p1', aim: (r, o) => ({ x: o.x + 30, y: o.cy, r: 90 }) },
+  { id: 'coins',  msg: ['GRAB THE COINS', 'SPEND THEM IN THE SHOP'], at: r => r.scraps.some(s => !s.got && s.x - r.dist < BX + 200), aim: r => { const s = r.scraps.find(q => !q.got); return s ? { x: s.x + 80, y: s.y, r: 90 } : null; } },
+  { id: 'hearts', msg: ['YOU HAVE 3 HEARTS', 'A HIT COSTS ONE. LOSE THEM ALL = RUN OVER'], hud: { x: 50, y: 50, r: 44 }, after: 'coins', gap: 120 },
+  { id: 'drone',  msg: ['STOMP DRONES FROM ABOVE', 'FALL ONTO THEM. FROM THE SIDE THEY HURT'], obj: 'dr', aim: (r, o) => ({ x: o.x, y: o.y, r: 50 }) },
+  { id: 'bubble', msg: ['FLY INTO ? BUBBLES', 'EACH ONE GIVES A RANDOM POWER'], obj: 'bu', aim: (r, o) => ({ x: o.x, y: o.p.cy, r: 50 }) },
+  { id: 'heart',  msg: ['HEARTS HEAL YOU', 'GRAB THEM WHEN YOU ARE HURT'], obj: 'ht', aim: (r, o) => ({ x: o.x, y: o.y, r: 44 }) },
+  { id: 'slider', msg: ['SOME PIPES MOVE', 'WATCH THE ARROWS AND TIME IT'], obj: 'p4', aim: (r, o) => ({ x: o.x + 30, y: o.cy, r: 110 }) },
+  { id: 'pad',    msg: ['FLY INTO LAUNCHERS', 'THEY ROCKET YOU AHEAD, SAFE FROM HITS'], obj: 'pd', aim: (r, o) => ({ x: o.x, y: o.y, r: 48 }) },
+  { id: 'fever',  msg: ['COINS FILL THE FEVER BAR', 'FULL FEVER: WIDE GAPS, DOUBLE COINS'], hud: { x: W / 2 + 20, y: H - 18, r: 60 }, after: 'pad', gap: 500 },
+  { id: 'map',    msg: ['FLY 3,000 M TO THE SUMMIT', 'BEAT 3 GUARDIANS ON THE WAY UP'], hud: { x: W / 2, y: 12, r: 70 }, after: 'fever', gap: 60 },
+  { id: 'shop',   msg: ['FALLING IS PART OF IT', 'COINS STAY YOURS: UPGRADE, GO FURTHER'], after: 'map', gap: 60 },
+  { id: 'done',   msg: ["YOU'RE READY!", 'TAP TO START YOUR FIRST REAL RUN'], after: 'shop', gap: 40, end: true },
+];
+function tutTick() {
+  const r = run, T = r.tut; if (!T || T.pause) return;
+  r.hp = Math.max(r.hp, 1); r.hint = null;
+  const S = TUT_STEPS[T.i]; if (!S) return;
+  let go = false;
+  if (S.obj) { const o = T.objs[S.obj]; go = o && o.x - r.dist < BX + 190; }
+  else if (S.at) go = S.at(r);
+  else if (S.after) { if (T.afterAt === undefined) T.afterAt = r.dist + S.gap; go = r.dist >= T.afterAt; }
+  if (go) { T.pause = S; T.afterAt = undefined; T.shownAt = performance.now(); SFX.click && SFX.click(); }
+}
+function tutTap() {                                   // a tap while a lesson is up dismisses it
+  const T = run.tut; if (!T || !T.pause) return false;
+  if (performance.now() - T.shownAt < 350) return true;
+  const S = T.pause; T.pause = null; T.i++;
+  if (S.end) { save.seen.tut = true; persist(); run.tut = null; startRun(false); return true; }
+  if (S.id === 'tap') { run.started = true; run.bird.vy = -flapV(); run.lastFlap = run.t; SFX.flap(); }
+  return true;
+}
+function drawTutorial() {
+  const T = run && run.tut; if (!T) return;
+  pixText = true;
+  btn('SKIP', W - 76, 70, 62, 26, () => { save.seen.tut = true; persist(); run.tut = null; startRun(false); }, { color: '#2a3350', size: 11 });
+  const S = T.pause; if (!S) { text('TUTORIAL', W / 2, 92, 12, PXC.mist); return; }
+  const tt = performance.now() / 1000, o = S.obj ? T.objs[S.obj] : null;
+  let a = S.hud ? S.hud : S.aim ? S.aim(run, o) : null;
+  if (a && !S.hud) a = { x: (a.x - (S.aim && (S.obj || S.id === 'coins') ? run.dist : 0)) * ZS, y: a.y * ZS, r: a.r * ZS };
+  ctx.save(); ctx.globalAlpha = 0.62; ctx.fillStyle = '#181425'; ctx.beginPath(); ctx.rect(0, 0, W, H);
+  if (a) { const rr2 = a.r + Math.sin(tt * 4) * 3; ctx.moveTo(a.x + rr2, a.y); ctx.arc(a.x, a.y, rr2, 0, Math.PI * 2, true); }
+  ctx.fill('evenodd'); ctx.restore();
+  if (a) {
+    ctx.strokeStyle = PXC.yellow; ctx.lineWidth = 4; ctx.setLineDash([8, 6]); ctx.lineDashOffset = -tt * 30; ctx.beginPath(); ctx.arc(a.x, a.y, a.r + 4 + Math.sin(tt * 4) * 3, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    const below = a.y < H * 0.45, hx = a.x + (a.x > W * 0.6 ? -1 : 1) * (a.r * 0.55), hy = a.y + (below ? 1 : -1) * (a.r + 18 + Math.abs(Math.sin(tt * 5)) * 10);
+    drawHand(hx, hy, below);
+  }
+  const ty = a && a.y > H * 0.5 ? 150 : H - 170;
+  pixTextDraw(S.msg[0], W / 2, ty, 22, PXC.yellow, 'center', PXC.ink);
+  pixTextDraw(S.msg[1], W / 2, ty + 30, 12, PXC.white, 'center', PXC.ink);
+  if (performance.now() - T.shownAt > 350 && Math.floor(tt * 2) % 2 === 0) pixTextDraw(S.id === 'tap' ? 'TAP TO FLAP' : 'TAP TO CONTINUE', W / 2, ty + 58, 12, PXC.cyan, 'center', PXC.ink);
+  pixTextDraw(`${T.i + 1} / ${TUT_STEPS.length}`, W / 2, ty - 26, 11, PXC.mist, 'center', PXC.ink);
+}
+const HAND = ['....XX....', '...XWWX...', '...XWWX...', '...XWWXXX.', '.XXXWWWWWX', 'XWWXWWWWWX', 'XWWWWWWWWX', '.XWWWWWWWX', '..XWWWWWX.', '...XXXXX..'];
+function drawHand(x, y, pointUp) {
+  const u = 3, rows = pointUp ? HAND : [...HAND].reverse(), X = Math.round(x - 15), Y = Math.round(y - 15);
+  for (let r = 0; r < rows.length; r++) for (let q = 0; q < rows[r].length; q++) { const k = rows[r][q]; if (k === '.') continue; ctx.fillStyle = k === 'X' ? '#181425' : '#ffffff'; ctx.fillRect(X + q * u, Y + r * u, u, u); }
+}
 function startRun(daily, startAlt) {
   fadeA = 0.7; paused = false; resumeT = 0;
   dailyMode = daily === true;
@@ -383,7 +493,7 @@ function startRun(daily, startAlt) {
 
 // ---------- World generation (ahead of the camera, never depends on the player) ----------
 const rampSpeed = () => { const m = mOf(), z = zoneOf(m), z0 = z ? ZONES[z - 1].to : 0, f = clamp((m - z0) / Math.max(1, ZONES[z].to - z0), 0, 1), next = ZSPD[Math.min(4, z + 1)]; return (ZSPD[z] + (next - ZSPD[z]) * f * 0.6) * (1 + Math.min(0.12, Math.max(0, m - (run.startAlt || 0)) / 2500)); };
-const speedNow = () => (FX().ramp ? rampSpeed() : ZSPD[zoneOf(mOf())]) * (tl('wing') >= 3 ? 0.94 : 1) * Math.pow(0.92, cl('slow'));
+const speedNow = () => (FX().ramp ? rampSpeed() : ZSPD[zoneOf(mOf())]) * (run.tut ? 0.8 : 1) * (tl('wing') >= 3 ? 0.94 : 1) * Math.pow(0.92, cl('slow'));
 function genLimit() { return run.gi >= 0 && run.gi < GUARDS.length ? GUARDS[run.gi].alt * PPM - 250 : 1e12; }
 function genPipes() { while (run.genX < run.dist + VW + 700 && run.genX < genLimit()) addPipe(); }
 function addPipe() {
@@ -453,12 +563,14 @@ function addPipe() {
   if (FX().health && gc >= 8 && gc % 12 === 8) run.hearts.push({ x: midX, y: grng(150, VH - 150), got: false });
   if (gc === 2 && FX().flow && FX().drones) run.drones.push({ x: midX, y0: 250, amp: 30, ph: 0, spd: 1.6, dead: false, y: 250, tut: true });
   if (gc === 6 && FX().flow && FX().pads) run.pads.push({ x: midX, y: VH * 0.44, got: false, tut: true });
+  if (FX().tidy) tidySpawns(p.x - 420);
   run.genX += sp;
 }
 
 // ---------- Actions ----------
 function flap() {
   if (state !== 'play' || run.dying || paused || resumeT > 0) return;
+  if (run.tut && tutTap()) return;
   const b = run.bird;
   run.started = true; b.vy = -flapV() * run.gravDir; run.lastFlap = run.t; SFX.flap();
   for (let i = 0; i < 4; i++) parts.push({ x: BX - 8, y: b.y + 6, vx: rng(-70, -20), vy: rng(10, 70), l: .35, c: '#e8eefc' });
@@ -481,6 +593,7 @@ function heal(n, why) {
   run.hp = Math.min(run.maxHp, run.hp + n); SFX.heal(); float('+1 HEART', BX + 30, run.bird.y - 30, '#ff7aa8'); if (why) float(why, VW / 2, 150, '#ff7aa8'); flash = { c: '#f6757a', a: .22 };
 }
 function hurt(why) {
+  if (run.tut) run.hp = Math.max(2, run.hp);
   if (run.dying || run.invuln > 0 || run.boostT > 0) return;
   if (run.streak >= 5) float('streak lost', BX + 30, run.bird.y - 40, '#aaa');
   run.streak = 0; run.chain = 0;
@@ -606,6 +719,7 @@ function update(dt) {
   floaters = floaters.filter(f => f.l > 0);
   if (zoneToast.t > 0) zoneToast.t -= dt;
   if (state !== 'play') return;
+  if (run.tut) { tutTick(); if (run.tut && run.tut.pause) return; }
 
   const b = run.bird, F = run.fight, r = hitR();
   if (run.dying) {                                   // slow-motion fall before the end screen
@@ -1924,7 +2038,7 @@ function drawHUD() {
     ctx.globalAlpha = 1;
   }
   if (zoneToast.t > 0) { ctx.globalAlpha = Math.min(1, zoneToast.t); text(zoneToast.txt.toUpperCase(), W / 2, 170, 22, PXC.white); ctx.globalAlpha = 1; }
-  if (!run.started) {
+  if (!run.started && !run.tut) {
     if (!FX().ui2) panel(40, H / 2 + 52, W - 80, 92, { fill: PXC.navy });
     text('TAP TO FLAP', W / 2, H / 2 + 80, FX().ui2 ? 28 + (Math.floor(performance.now() / 400) % 2) * 4 : 24, PXC.white);
     text(FX().launch ? 'FLY THROUGH GAPS, STOMP DRONES' : 'FLY THROUGH THE GAPS, STOMP DRONES FROM ABOVE', W / 2, H / 2 + 108, 11, PXC.ice);
@@ -2120,7 +2234,8 @@ function drawTitle() {
   pixTextDraw('FLAPOCALYPSE', W / 2, 150, 40, PXC.yellow, 'center', PXC.ink);
   panel(W / 2 - 112, 190, 224, 34);
   text(`V${V.v} · ${V.name}`, W / 2, 207, 14, PXC.yellow);
-  btn('PLAY', 60, 300, 280, 66, () => startRun(false), { color: '#e0753a', size: 30 });
+  btn('PLAY', 60, 300, 280, 66, () => (FX().tut && !save.seen.tut && !save.runs ? startTutorial() : startRun(false)), { color: '#e0753a', size: 30 });
+  if (FX().tut) btn('HOW TO PLAY', 60, 508, 280, 40, () => startTutorial(), { color: '#2a3350', size: 14 });
   if (FX().workshop) btn(FX().shop ? 'SHOP' : 'WORKSHOP', 60, 384, 280, 48, () => { state = 'menu'; }, { color: '#3c6df0', size: 18 });
   btn('UPDATES', 60, FX().workshop ? 448 : 384, 280, 48, () => { pv = ver; cmp = 0.5; state = 'updates'; }, { color: '#7a4fe0', size: 18 });
   muteBtn(W - 36, 34);
@@ -2195,6 +2310,7 @@ function renderInner() {
 function render() {
   fitCanvas(); ctx.setTransform(K, 0, 0, K, 0, 0); ctx.imageSmoothingEnabled = false;
   renderInner();
+  if (state === 'play' && run && run.tut && !paused) drawTutorial();
   if (state === 'play' && (paused || resumeT > 0)) {
     pixText = true; dimDither(3);
     if (paused) { if (!FX().ui2) panel(50, H / 2 - 70, W - 100, 140); pixTextDraw('PAUSED', W / 2, H / 2 - 22, 40, PXC.white, 'center', PXC.ink); text('TAP TO RESUME', W / 2, H / 2 + 36, 16, PXC.yellow); }
