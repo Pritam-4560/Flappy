@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -113,7 +113,9 @@ const VERS = [
   { v: '1.20', name: 'Void Cruiser', sum: 'A new look, and a spaceship final boss.', visual: 'Layered skies, alien warship',
     notes: ['Final boss: the Void Cruiser spaceship', 'It hunts your lane, charges and fires', 'New art: clean layered parallax skies', 'Depth haze, rim light, hero animations', 'The ship explodes when you win'] },
   { v: '1.21', name: 'How To Play', sum: 'A hands-on tutorial. Pickups never overlap.', visual: 'Guided tutorial, tidy pickups',
-    notes: ['A step-by-step tutorial that pauses and points', 'A hand and spotlight show you each thing', 'Covers pipes, coins, drones, powers, fever', 'Coins and powers never overlap or hide', 'Find it on the title: HOW TO PLAY'] },
+    notes: ['Step-by-step lessons that pause the game', 'A hand and spotlight show you each thing', 'Covers pipes, coins, drones, powers, fever', 'Coins and powers never overlap or hide', 'Find it on the title: HOW TO PLAY'] },
+  { v: '1.22', name: 'Tap Tricks', sum: 'Four kinds of tap, four new moves.', visual: 'Glide, spin dash, dive',
+    notes: ['TAP: flap, same as always', 'HOLD: glide, falling slowly (meter)', 'DOUBLE TAP: spin dash, smash drones', 'SWIPE DOWN: dive, stomp for double', 'Keys: hold Space, double Space, Down'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -407,7 +409,7 @@ function tidySpawns(x0) {
 // ---------- 1.21: a hands-on tutorial that pauses the game and walks you through every idea ----------
 function startTutorial() {
   startRun(false);
-  const r = run, x0 = r.dist + 520, mid = VH / 2 - 40, P = (x, gy, kind = 'normal', extra = {}) => { const p = { x, w: 60, gy, base: 250, amp: 0, ph: 0, spd: 1, z: 0, passed: false, minEdge: 99, cy: gy, gap: 250, kind, ...extra }; r.pipes.push(p); return p; };
+  const r = run, x0 = r.dist + (FX().taps ? 1500 : 520), mid = VH / 2 - 40, P = (x, gy, kind = 'normal', extra = {}) => { const p = { x, w: 60, gy, base: 250, amp: 0, ph: 0, spd: 1, z: 0, passed: false, minEdge: 99, cy: gy, gap: 250, kind, ...extra }; r.pipes.push(p); return p; };
   r.pipes = []; r.scraps = []; r.drones = []; r.gears = []; r.pads = []; r.bubbles = []; r.hearts = []; r.gates = []; r.bolts = [];
   r.genX = 1e12; r.gi = -1; r.nextBubble = 1e9; r.shields = 0;
   const p1 = P(x0, mid);
@@ -423,6 +425,9 @@ function startTutorial() {
 const TUT_STEPS = [
   { id: 'tap',    msg: ['TAP TO FLAP!', 'EVERY TAP GIVES RIVET A LITTLE LIFT'], at: r => !r.started, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
   { id: 'air',    msg: ['KEEP TAPPING TO STAY UP', "DON'T FALL ON THE GROUND"], at: r => r.started && r.t > 0.8, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
+  { id: 'hold',   msg: ['HOLD TO GLIDE', 'KEEP YOUR FINGER DOWN TO FALL SLOWLY'], after: 'air', gap: 60, need: 'hold', taps: true, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
+  { id: 'double', msg: ['DOUBLE TAP TO SPIN DASH', 'THE SPIN SMASHES DRONES AND GEARS'], after: 'hold', gap: 40, need: 'double', taps: true, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
+  { id: 'swipe',  msg: ['SWIPE DOWN TO DIVE', 'DROP FAST. DIVE-STOMPS PAY DOUBLE'], after: 'double', gap: 40, need: 'swipe', taps: true, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
   { id: 'pipe',   msg: ['FLY THROUGH THE GAP', 'TOUCHING A PIPE COSTS A HEART'], obj: 'p1', aim: (r, o) => ({ x: o.x + 30, y: o.cy, r: 90 }) },
   { id: 'coins',  msg: ['GRAB THE COINS', 'SPEND THEM IN THE SHOP'], at: r => r.scraps.some(s => !s.got && s.x - r.dist < BX + 200), aim: r => { const s = r.scraps.find(q => !q.got); return s ? { x: s.x + 80, y: s.y, r: 90 } : null; } },
   { id: 'hearts', msg: ['YOU HAVE 3 HEARTS', 'A HIT COSTS ONE. LOSE THEM ALL = RUN OVER'], hud: { x: 50, y: 50, r: 44 }, after: 'coins', gap: 120 },
@@ -439,6 +444,8 @@ const TUT_STEPS = [
 function tutTick() {
   const r = run, T = r.tut; if (!T || T.pause) return;
   r.hp = Math.max(r.hp, 1); r.hint = null;
+  if (T.need) { if (r.tutDid && r.tutDid[T.need]) { T.need = null; float('NICE!', BX + 30, r.bird.y - 40, '#63c74d'); SFX.ding && SFX.ding(); } else return; }
+  while (TUT_STEPS[T.i] && TUT_STEPS[T.i].taps && !FX().taps) T.i++;
   const S = TUT_STEPS[T.i]; if (!S) return;
   let go = false;
   if (S.obj) { const o = T.objs[S.obj]; go = o && o.x - r.dist < BX + 190; }
@@ -449,7 +456,7 @@ function tutTick() {
 function tutTap() {                                   // a tap while a lesson is up dismisses it
   const T = run.tut; if (!T || !T.pause) return false;
   if (performance.now() - T.shownAt < 350) return true;
-  const S = T.pause; T.pause = null; T.i++;
+  const S = T.pause; T.pause = null; T.i++; if (S.need) { T.need = S.need; run.tutDid = {}; run.tutGlide = 0; }
   if (S.end) { save.seen.tut = true; persist(); run.tut = null; startRun(false); return true; }
   if (S.id === 'tap') { run.started = true; run.bird.vy = -flapV(); run.lastFlap = run.t; SFX.flap(); }
   return true;
@@ -458,7 +465,17 @@ function drawTutorial() {
   const T = run && run.tut; if (!T) return;
   pixText = true;
   btn('SKIP', W - 76, 70, 62, 26, () => { save.seen.tut = true; persist(); run.tut = null; startRun(false); }, { color: '#2a3350', size: 11 });
-  const S = T.pause; if (!S) { text('TUTORIAL', W / 2, 92, 12, PXC.mist); return; }
+  const S = T.pause;
+  if (!S && T.need) {
+    const tt2 = performance.now() / 1000, bx = BX * ZS, by = run.bird.y * ZS, lbl = { hold: 'TRY IT: HOLD DOWN!', double: 'TRY IT: TAP TAP!', swipe: 'TRY IT: SWIPE DOWN!' }[T.need];
+    if (Math.floor(tt2 * 3) % 2 === 0) pixTextDraw(lbl, W / 2, H - 120, 20, PXC.yellow, 'center', PXC.ink);
+    const hx = bx + 70, hy0 = by + 30;
+    if (T.need === 'hold') { drawHand(hx, hy0 + 4, true); ctx.strokeStyle = PXC.cyan; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(hx, hy0 - 16, 10 + (tt2 * 20) % 12, 0, 7); ctx.stroke(); }
+    else if (T.need === 'double') { const k = (tt2 * 2.5) % 1, press = k < 0.15 || (k > 0.3 && k < 0.45); drawHand(hx, hy0 + (press ? 6 : 0), true); }
+    else { const k = (tt2 * 1.4) % 1; drawHand(hx, hy0 - 20 + k * 60, true); ctx.fillStyle = PXC.cyan; for (let q = 0; q < 3; q++) ctx.fillRect(hx + 24, hy0 - 10 + q * 16, 4, 10); }
+    return;
+  }
+  if (!S) { text('TUTORIAL', W / 2, 92, 12, PXC.mist); return; }
   const tt = performance.now() / 1000, o = S.obj ? T.objs[S.obj] : null;
   let a = S.hud ? S.hud : S.aim ? S.aim(run, o) : null;
   if (a && !S.hud) a = { x: (a.x - (S.aim && (S.obj || S.id === 'coins') ? run.dist : 0)) * ZS, y: a.y * ZS, r: a.r * ZS };
@@ -568,6 +585,29 @@ function addPipe() {
 }
 
 // ---------- Actions ----------
+// ---------- 1.22 tap types: tap = flap, hold = glide, double tap = spin dash, swipe down = dive ----------
+let tapDown = false, tapDownAt = 0, tapDownY = 0, lastTapAt = -1e9, swiped = false;
+function tapStart(y) {
+  const now = performance.now(), T = FX().taps && state === 'play' && run && run.started && !(run.tut && run.tut.pause);
+  tapDown = true; tapDownAt = now; tapDownY = y == null ? null : y; swiped = false;
+  if (T && now - lastTapAt < 260 && (run.dashCD || 0) <= 0) { lastTapAt = -1e9; dash(); return; }
+  lastTapAt = now; flap();
+}
+function tapEnd() { tapDown = false; }
+function tapMove(y) { if (!tapDown || swiped || tapDownY == null || !FX().taps || state !== 'play') return; if (y - tapDownY > 34 && performance.now() - tapDownAt < 320) { swiped = true; dive(); } }
+function dash() {
+  if (state !== 'play' || run.dying || !run.started) return;
+  const b = run.bird; run.dashT = 0.42; run.dashCD = 1.1; b.vy = -flapV() * 0.75 * run.gravDir; run.lastFlap = run.t;
+  tone(300, 1200, 0.18, 'sawtooth', 0.05); tone(900, 1800, 0.12, 'square', 0.03, 0.05);
+  float('SPIN!', BX + 30, b.y - 26, '#2ce8f5'); if (FX().emote) { run.emo = { type: 'pump', t: 0, dur: 0.42 }; }
+  if (run.tut) (run.tutDid || (run.tutDid = {})).double = true;
+}
+function dive() {
+  if (state !== 'play' || run.dying || !run.started) return;
+  const b = run.bird; b.vy = 760 * run.gravDir; run.diveT = 0.4;
+  tone(700, 140, 0.2, 'triangle', 0.06); float('DIVE!', BX + 30, b.y - 26, '#fee761');
+  if (run.tut) (run.tutDid || (run.tutDid = {})).swipe = true;
+}
 function flap() {
   if (state !== 'play' || run.dying || paused || resumeT > 0) return;
   if (run.tut && tutTap()) return;
@@ -750,7 +790,19 @@ function update(dt) {
       run.boostT = 0; run.invuln = Math.max(run.invuln, 2.4); run.afterBoost = 2.4; run.boostEase = 0.9; b.vy = -160;
       float('FLAP TO TAKE OVER', VW / 2, 160, '#fee761');
     }
-  } else { b.vy = clamp(b.vy + (gravity() * gd + run.wind * 260) * dt, -maxFall(), maxFall()); b.y += b.vy * dt; }
+  } else {
+    if (FX().taps) {
+      run.dashT = Math.max(0, (run.dashT || 0) - dt); run.dashCD = Math.max(0, (run.dashCD || 0) - dt); run.diveT = Math.max(0, (run.diveT || 0) - dt);
+      if (run.glideE === undefined) run.glideE = 1.5;
+      run.glide = tapDown && !swiped && performance.now() - tapDownAt > 170 && run.glideE > 0 && b.vy * gd > 0;
+      if (run.glide) { run.glideE = Math.max(0, run.glideE - dt); if (run.tut) { run.tutGlide = (run.tutGlide || 0) + dt; if (run.tutGlide > 0.4) (run.tutDid || (run.tutDid = {})).hold = true; } }
+      else if (!tapDown) run.glideE = Math.min(1.5, run.glideE + dt * 0.5);
+    }
+    const fallCap = run.diveT > 0 ? 820 : maxFall();
+    b.vy = clamp(b.vy + (gravity() * gd + run.wind * 260) * dt, -fallCap, fallCap);
+    if (run.glide && b.vy * gd > 75) b.vy = 75 * gd;
+    b.y += b.vy * dt;
+  }
   const flY = FX().junk ? VH - (FX().feel ? GROUND_H + 10 : 18) : VH - 66;
   if (b.y > flY) { b.y = flY; if (gd > 0) { b.vy = -380; hurt('the floor'); if (state !== 'play') return; } else b.vy = Math.min(b.vy, 0); }
   if (b.y < 14) { b.y = 14; if (gd < 0) { b.vy = 380; hurt('the ceiling'); if (state !== 'play') return; } else b.vy = Math.max(b.vy, 0); }
@@ -840,6 +892,8 @@ function update(dt) {
     if (d.dead) continue;
     const dx = BX - (d.x - run.dist), dy = b.y - d.y;
     if (Math.abs(dx) < 22 && Math.abs(dy) < 22) {
+      if (run.dashT > 0) { d.dead = true; run.stomps = (run.stomps || 0) + 1; addScrap(3, BX + 20, d.y); addFever(10); shake = 6; SFX.stomp(4); float('SMASH!', BX + 30, d.y - 14, '#2ce8f5'); for (let i = 0; i < 12; i++) parts.push({ x: BX + 10, y: d.y, vx: rng(-200, 200), vy: rng(-200, 100), l: .5, c: i % 2 ? '#2ce8f5' : '#9aa6c8' }); continue; }
+      if (run.diveT > 0 && b.vy * gd > 40 && dy * gd < -2) addScrap(2, BX + 20, d.y - 20);
       if (b.vy * gd > 40 && dy * gd < -2) {
         run.stomps = (run.stomps || 0) + 1; const fl = FX().flow; d.dead = true; b.vy = -600 * gd * (1 + 0.25 * cl('spring')); if (fl) { run.chain++; run.chainT = 1.8; run.freeze = 0.06; } addFever(10); addScrap(fl ? 2 * run.chain : 2, BX + 20, d.y); shake = fl ? 5 : 4; SFX.stomp(fl ? run.chain - 1 : 0);
         float(fl && run.chain > 1 ? 'STOMP x' + run.chain + '!' : 'STOMP!', BX + 30, d.y - 14, '#6fe3ff'); if (!save.seen.drone) { save.seen.drone = true; persist(); }
@@ -847,9 +901,10 @@ function update(dt) {
       } else hurt('a junk drone');
     }
   }
+  run.gears = run.gears.filter(g => !g.dead);
   for (const gr of run.gears) {
     gr.y = gr.y0 + gr.amp * Math.sin(gr.ph + run.t * gr.spd); gr.a += dt * 6;
-    if (Math.hypot(BX - (gr.x - run.dist), b.y - gr.y) < 20 + r) hurt('a gear');
+    if (Math.hypot(BX - (gr.x - run.dist), b.y - gr.y) < 20 + r) { if (run.dashT > 0) { gr.dead = true; addScrap(3, BX + 20, gr.y); shake = 7; SFX.stomp(6); float('SMASH!', BX + 30, gr.y - 14, '#2ce8f5'); for (let i = 0; i < 14; i++) parts.push({ x: BX + 10, y: gr.y, vx: rng(-220, 220), vy: rng(-220, 100), l: .5, c: i % 2 ? '#c0703c' : '#feae34' }); } else hurt('a gear'); }
   }
   for (const p of run.pads) {
     if (!p.got && Math.hypot(BX - (p.x - run.dist), b.y - p.y) < 28) {
@@ -1257,7 +1312,7 @@ function drawJunkBird() {
   const blink = run.invuln > 0 && ((run.t * 20) | 0) % 2;
   const rot = clamp(b.vy / 700, -.5, .9);
   if (rivetOk && FX().sprite) {
-    const row = run.dying ? 6 : run.boostT > 0 ? 0 : rivetRowFor(run.tiltV || 0), c = rivetCell(since, run.t, row);
+    const row = run.dying ? 6 : run.boostT > 0 ? 0 : rivetRowFor(run.tiltV || 0), c = run.glide ? [Math.floor(run.t * 5) % 4, 1] : rivetCell(since, run.t, row);
     if (!FX().emote) { drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0); }
     else {
       const m = moodNow(), k = m.k, t = m.t; let sx = 1, sy = 1, rot = 0, ox = 0, oy = 0; const PI = Math.PI;
@@ -1284,6 +1339,12 @@ function drawJunkBird() {
       ctx.save(); ctx.translate(Math.round(BX / 4) * 4, Math.round(b.y / 4) * 4); if (run.gravDir < 0) ctx.scale(1, -1); ctx.globalAlpha = blink ? .4 : 1; drawFace(m.type, k, t); ctx.restore();
       ctx.restore();
       drawEmoFx(m.type, k, t, BX + ox, b.y + oy);
+      if (FX().taps) {
+        if (run.dashT > 0) { ctx.save(); ctx.globalAlpha = Math.min(1, run.dashT * 2.5); ctx.strokeStyle = '#2ce8f5'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(BX, b.y, 30 + (0.42 - run.dashT) * 60, 0, 7); ctx.stroke(); ctx.fillStyle = '#ffffff'; for (let q = 0; q < 6; q++) { const a = q * 1.05 + run.t * 14; ctx.fillRect(Math.round((BX + Math.cos(a) * 30) / 4) * 4, Math.round((b.y + Math.sin(a) * 30) / 4) * 4, 4, 4); } ctx.restore(); }
+        if (run.diveT > 0) { ctx.fillStyle = '#ffffff'; for (let q = 0; q < 5; q++) ctx.fillRect(Math.round((BX - 24 + q * 12) / 4) * 4, Math.round((b.y - 44 - ((run.t * 500 + q * 37) % 44)) / 4) * 4, 4, 16); }
+        if (run.glide) { ctx.fillStyle = '#c0cbdc'; for (let q = 0; q < 3; q++) ctx.fillRect(Math.round((BX - 50 - ((run.t * 300 + q * 23) % 40)) / 4) * 4, Math.round((b.y - 12 + q * 12) / 4) * 4, 16, 4); }
+        if (run.glideE !== undefined && run.glideE < 1.5) { const w = 40, f = run.glideE / 1.5; ctx.fillStyle = '#181425'; ctx.fillRect(BX - w / 2 - 4, Math.round((b.y + 32) / 4) * 4, w + 8, 12); ctx.fillStyle = '#3a4466'; ctx.fillRect(BX - w / 2, Math.round((b.y + 32) / 4) * 4 + 4, w, 4); ctx.fillStyle = run.glide ? '#2ce8f5' : '#8b9bb4'; ctx.fillRect(BX - w / 2, Math.round((b.y + 32) / 4) * 4 + 4, Math.round(w * f / 4) * 4, 4); }
+      }
     }
   }
   else drawRivet(BX, b.y, rot, wing, run.feverT > 0, run.shields > 0, blink ? .4 : 1);
@@ -1973,7 +2034,7 @@ function drawMini(v, t, x, y, w, h, sc) {
 
 // ---------- Title and Updates screens ----------
 let pv = ver, cmp = 0.5, dragging = false;
-const PREV = { x: 20, y: 76, w: 360, h: 292 };
+const PREV = { x: 20, y: 76, w: 360, h: 262 };
 
 // ======================= Pixel screens: one grid, one palette, no gradients or soft alpha =======================
 function para(t, x, y, size, col, maxW, lh) {
@@ -2261,10 +2322,10 @@ function drawUpdates() {
     panel(P.x + 10, P.y + 10, 88, 26, { fill: PXC.ink, hi: PXC.ink }); text('V1.0 BASE', P.x + 54, P.y + 23, 11, PXC.white);
     panel(P.x + P.w - 74, P.y + 10, 64, 26, { fill: PXC.ink, hi: PXC.ink }); text(`V${V.v}`, P.x + P.w - 42, P.y + 23, 11, PXC.yellow);
   }
-  const cw = 32, gap = 3, x0 = (W - (11 * cw + 10 * gap)) / 2;
+  const cw = 42, gap = 4, x0 = (W - (8 * cw + 7 * gap)) / 2;
   for (let i = 1; i <= LATEST; i++) {
-    const cx = x0 + ((i - 1) % 11) * (cw + gap), cy = i <= 11 ? 372 : 404, sel = i === pv;
-    btn(VERS[i - 1].v, cx, cy, cw, 28, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 12 });
+    const cx = x0 + ((i - 1) % 8) * (cw + gap), cy = 346 + Math.floor((i - 1) / 8) * 30, sel = i === pv;
+    btn(VERS[i - 1].v, cx, cy, cw, 26, () => { pv = i; }, { color: sel ? '#e0753a' : (i === ver ? '#3c6df0' : '#2a3350'), size: 12 });
   }
   panel(20, 438, 360, 142);
   text(`${V.v}  ${V.name}`, 32, 454, 18, PXC.white, 'left');
@@ -2341,11 +2402,13 @@ function pointer(e) {
   for (const b of buttons) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { SFX.click(); pressFx = { x: b.x, y: b.y, t: performance.now() }; if (state !== 'play' && state !== 'pick') fadeA = 0.5; b.onClick(); return; }
   if (state === 'updates' && x >= PREV.x && x <= PREV.x + PREV.w && y >= PREV.y && y <= PREV.y + PREV.h) { dragging = true; cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); return; }
   if ((state === 'dead' || state === 'victory') && FX().polish && performance.now() - deadAt > 700) { startRun(dailyMode); return; }   // tap anywhere to run it back
-  flap();
+  if (FX().taps) tapStart(y); else flap();
 }
 cv.addEventListener('pointerdown', pointer);
-cv.addEventListener('pointermove', e => { if (dragging) { const [x] = toLogical(e); cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); } });
-addEventListener('pointerup', () => { dragging = false; });
+cv.addEventListener('pointermove', e => { if (dragging) { const [x] = toLogical(e); cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); } else if (tapDown) { const [, y] = toLogical(e); tapMove(y); } });
+addEventListener('pointerup', () => { dragging = false; tapEnd(); });
+addEventListener('pointercancel', () => { tapEnd(); });
+addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') tapEnd(); });
 addEventListener('keydown', e => {
   const k = e.code; ac();
   if (k === 'KeyP' || k === 'Escape') { if (state === 'play') { if (paused) resumeNow(); else pauseNow(); return; } }
@@ -2358,8 +2421,9 @@ addEventListener('keydown', e => {
   if (k === 'Space' || k === 'ArrowUp' || k === 'KeyW') {
     e.preventDefault();
     if (state === 'dead' || state === 'victory') { if (performance.now() - deadAt > 500) startRun(dailyMode); }
-    else if (state === 'title' || state === 'menu') startRun(false); else flap();
+    else if (state === 'title' || state === 'menu') startRun(false); else if (FX().taps) { if (!e.repeat) tapStart(null); } else flap();
   }
+  else if ((k === 'ArrowDown' || k === 'KeyS') && state === 'play' && FX().taps) { e.preventDefault(); dive(); }
   else if (state === 'pick' && e.key >= '1' && e.key <= '9') choose(+e.key - 1);
   else if (e.key === 'Enter' && (state === 'menu' || state === 'title')) startRun(false);
 });
