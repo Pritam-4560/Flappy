@@ -120,8 +120,8 @@ const VERS = [
     notes: ['Grab a blue orb: Rivet fires it', 'Shots hit with a flash and knockback', 'Every hit chips off a health block', 'Bosses shake, burst and crash down', 'GUARDIAN DOWN! banner, then the loot'] },
   { v: '1.24', name: 'Trick Spots', sum: 'Places built for glide, dash and dive.', visual: 'Glide runs, crate walls, drops',
     notes: ['GLIDE RUNS: long sloping coin trails', 'CRATE WALLS: spin dash smashes through', 'DIVE DROPS: steep coin chains, high to low', 'A sign shows which move to use', 'One every few pipes, in every zone'] },
-  { v: '1.25', name: 'Dash', sum: 'Double tap is now a forward dash.', visual: 'Forward dash, cleaner signs',
-    notes: ['TAP TAP: a quick dash forward, no flip', 'Rivet lunges ahead in a straight line', 'Afterimages and speed lines', 'Still smashes crates, drones and gears', 'Cleaner floating signs'] },
+  { v: '1.25', name: 'Dash', sum: 'Swipe right to dash forward.', visual: 'Forward dash, cleaner signs',
+    notes: ['SWIPE RIGHT: a quick dash forward', 'Rivet lunges ahead in a straight line', 'Afterimages and speed lines', 'Still smashes crates, drones and gears', 'Cleaner floating signs'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -432,7 +432,7 @@ const TUT_STEPS = [
   { id: 'tap',    msg: ['TAP TO FLAP!', 'EVERY TAP GIVES RIVET A LITTLE LIFT'], at: r => !r.started, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
   { id: 'air',    msg: ['KEEP TAPPING TO STAY UP', "DON'T FALL ON THE GROUND"], at: r => r.started && r.t > 0.8, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
   { id: 'hold',   msg: ['HOLD TO GLIDE', 'KEEP YOUR FINGER DOWN TO FALL SLOWLY'], after: 'air', gap: 60, need: 'hold', taps: true, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
-  { id: 'double', msg: ['DOUBLE TAP TO DASH', 'A QUICK LUNGE FORWARD. SMASHES DRONES'], after: 'hold', gap: 40, need: 'double', taps: true, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
+  { id: 'double', msg: ['SWIPE RIGHT TO DASH', 'A QUICK LUNGE FORWARD. SMASHES CRATES'], after: 'hold', gap: 40, need: 'double', taps: true, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
   { id: 'swipe',  msg: ['SWIPE DOWN TO DIVE', 'DROP FAST. DIVE-STOMPS PAY DOUBLE'], after: 'double', gap: 40, need: 'swipe', taps: true, aim: r => ({ x: BX, y: r.bird.y, r: 46 }) },
   { id: 'pipe',   msg: ['FLY THROUGH THE GAP', 'TOUCHING A PIPE COSTS A HEART'], obj: 'p1', aim: (r, o) => ({ x: o.x + 30, y: o.cy, r: 90 }) },
   { id: 'coins',  msg: ['GRAB THE COINS', 'SPEND THEM IN THE SHOP'], at: r => r.scraps.some(s => !s.got && s.x - r.dist < BX + 200), aim: r => { const s = r.scraps.find(q => !q.got); return s ? { x: s.x + 80, y: s.y, r: 90 } : null; } },
@@ -473,10 +473,11 @@ function drawTutorial() {
   btn('SKIP', W - 76, 70, 62, 26, () => { save.seen.tut = true; persist(); run.tut = null; startRun(false); }, { color: '#2a3350', size: 11 });
   const S = T.pause;
   if (!S && T.need) {
-    const tt2 = performance.now() / 1000, bx = BX * ZS, by = run.bird.y * ZS, lbl = { hold: 'TRY IT: HOLD DOWN!', double: 'TRY IT: TAP TAP!', swipe: 'TRY IT: SWIPE DOWN!' }[T.need];
+    const tt2 = performance.now() / 1000, bx = BX * ZS, by = run.bird.y * ZS, lbl = { hold: 'TRY IT: HOLD DOWN!', double: FX().fdash ? 'TRY IT: SWIPE RIGHT!' : 'TRY IT: TAP TAP!', swipe: 'TRY IT: SWIPE DOWN!' }[T.need];
     if (Math.floor(tt2 * 3) % 2 === 0) pixTextDraw(lbl, W / 2, H - 120, 20, PXC.yellow, 'center', PXC.ink);
     const hx = bx + 70, hy0 = by + 30;
     if (T.need === 'hold') { drawHand(hx, hy0 + 4, true); ctx.strokeStyle = PXC.cyan; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(hx, hy0 - 16, 10 + (tt2 * 20) % 12, 0, 7); ctx.stroke(); }
+    else if (T.need === 'double' && FX().fdash) { const k = (tt2 * 1.4) % 1; drawHand(hx - 30 + k * 70, hy0, true); ctx.fillStyle = PXC.cyan; for (let q = 0; q < 3; q++) ctx.fillRect(hx - 30 + q * 16, hy0 + 28, 10, 4); }
     else if (T.need === 'double') { const k = (tt2 * 2.5) % 1, press = k < 0.15 || (k > 0.3 && k < 0.45); drawHand(hx, hy0 + (press ? 6 : 0), true); }
     else { const k = (tt2 * 1.4) % 1; drawHand(hx, hy0 - 20 + k * 60, true); ctx.fillStyle = PXC.cyan; for (let q = 0; q < 3; q++) ctx.fillRect(hx + 24, hy0 - 10 + q * 16, 4, 10); }
     return;
@@ -617,15 +618,17 @@ function addPipe() {
 
 // ---------- Actions ----------
 // ---------- 1.22 tap types: tap = flap, hold = glide, double tap = spin dash, swipe down = dive ----------
-let tapDown = false, tapDownAt = 0, tapDownY = 0, lastTapAt = -1e9, swiped = false;
-function tapStart(y) {
+let tapDownX = 0, tapDown = false, tapDownAt = 0, tapDownY = 0, lastTapAt = -1e9, swiped = false;
+function tapStart(y, x) {
   const now = performance.now(), T = FX().taps && state === 'play' && run && run.started && !(run.tut && run.tut.pause);
-  tapDown = true; tapDownAt = now; tapDownY = y == null ? null : y; swiped = false;
-  if (T && now - lastTapAt < 260 && (run.dashCD || 0) <= 0) { lastTapAt = -1e9; dash(); return; }
+  tapDown = true; tapDownAt = now; tapDownY = y == null ? null : y; tapDownX = x == null ? null : x; swiped = false;
+  if (T && !FX().fdash && now - lastTapAt < 260 && (run.dashCD || 0) <= 0) { lastTapAt = -1e9; dash(); return; }
   lastTapAt = now; flap();
 }
 function tapEnd() { tapDown = false; }
-function tapMove(y) { if (!tapDown || swiped || tapDownY == null || !FX().taps || state !== 'play') return; if (y - tapDownY > 34 && performance.now() - tapDownAt < 320) { swiped = true; dive(); } }
+function tapMove(y, x) { if (!tapDown || swiped || tapDownY == null || !FX().taps || state !== 'play') return; const quick = performance.now() - tapDownAt < 320, dx = x == null || tapDownX == null ? 0 : x - tapDownX, dy = y - tapDownY;
+  if (FX().fdash && quick && dx > 34 && dx > Math.abs(dy) && (run.dashCD || 0) <= 0) { swiped = true; dash(); return; }
+  if (dy > 34 && quick && dy > Math.abs(dx)) { swiped = true; dive(); } }
 function dash() {
   if (state !== 'play' || run.dying || !run.started) return;
   const b = run.bird, FD = FX().fdash; run.dashT = FD ? 0.3 : 0.42; run.dashCD = FD ? 0.9 : 1.1; b.vy = FD ? 0 : -flapV() * 0.75 * run.gravDir; run.lastFlap = run.t;
@@ -2497,10 +2500,10 @@ function pointer(e) {
   for (const b of buttons) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { SFX.click(); pressFx = { x: b.x, y: b.y, t: performance.now() }; if (state !== 'play' && state !== 'pick') fadeA = 0.5; b.onClick(); return; }
   if (state === 'updates' && x >= PREV.x && x <= PREV.x + PREV.w && y >= PREV.y && y <= PREV.y + PREV.h) { dragging = true; cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); return; }
   if ((state === 'dead' || state === 'victory') && FX().polish && performance.now() - deadAt > 700) { startRun(dailyMode); return; }   // tap anywhere to run it back
-  if (FX().taps) tapStart(y); else flap();
+  if (FX().taps) tapStart(y, x); else flap();
 }
 cv.addEventListener('pointerdown', pointer);
-cv.addEventListener('pointermove', e => { if (dragging) { const [x] = toLogical(e); cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); } else if (tapDown) { const [, y] = toLogical(e); tapMove(y); } });
+cv.addEventListener('pointermove', e => { if (dragging) { const [x] = toLogical(e); cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); } else if (tapDown) { const [x, y] = toLogical(e); tapMove(y, x); } });
 addEventListener('pointerup', () => { dragging = false; tapEnd(); });
 addEventListener('pointercancel', () => { tapEnd(); });
 addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') tapEnd(); });
@@ -2519,6 +2522,7 @@ addEventListener('keydown', e => {
     else if (state === 'title' || state === 'menu') startRun(false); else if (FX().taps) { if (!e.repeat) tapStart(null); } else flap();
   }
   else if ((k === 'ArrowDown' || k === 'KeyS') && state === 'play' && FX().taps) { e.preventDefault(); dive(); }
+  else if ((k === 'ArrowRight' || k === 'KeyD') && state === 'play' && FX().fdash && (run.dashCD || 0) <= 0) { e.preventDefault(); dash(); }
   else if (state === 'pick' && e.key >= '1' && e.key <= '9') choose(+e.key - 1);
   else if (e.key === 'Enter' && (state === 'menu' || state === 'title')) startRun(false);
 });
