@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -126,6 +126,8 @@ const VERS = [
     notes: ['Coins top up your glide meter', 'Gems: 5 s coin MAGNET', 'Stomps and smashes: 5 s DOUBLE COINS', 'Hearts at full health give a shield', 'Wind trails and arrows instead of signs'] },
   { v: '1.27', name: 'Brick Breaker', sum: 'Walls you smash right through.', visual: 'Shattering brick walls',
     notes: ['Crates are now brick walls', 'Fly into them: they burst apart, no damage', 'Bricks fly, spin, bounce and fade', 'A dash blasts a whole hole through', 'Spaceship preview, clearer upgrades'] },
+  { v: '1.28', name: 'Little Helper', sum: 'A tiny hand shows each trick, three times.', visual: 'Hand hints at trick spots',
+    notes: ['A small hand appears by Rivet before a spot', 'Glide runs: it shows HOLD', 'Brick walls: it shows SWIPE RIGHT', 'Dive drops: it shows SWIPE DOWN', 'After 3 times each, it trusts you'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -597,7 +599,7 @@ function addPipe() {
   if (FX().spots && FX().scrap && gc >= 6 && !run.fight && gc >= (run.nextSpot || 6) && !run.tut) {      // a trick spot built for one of the tap moves
     const kinds = ['glide', 'dash', 'dive'], kind = kinds[(run.spotN = (run.spotN || 0) + 1) % 3];
     run.nextSpot = gc + 5 + Math.floor(seedRand() * 3);
-    p.kind = 'normal'; p.amp = 0; p.slal = false; p.spot = kind; if (FX().boosts) run.forceStill = true;
+    p.kind = 'normal'; p.amp = 0; p.slal = false; p.spot = kind; (run.marks = run.marks || []).push({ kind, x: p.x + p.w + 10 }); if (FX().boosts) run.forceStill = true;
     const lo2 = run.lastLo, hi2 = run.lastHi, x0 = p.x + p.w, extra = kind === 'glide' ? 460 : 0, x1 = p.x + sp + extra;
     const keep = o => !(o.x > x0 - 10 && o.x < x1 + 10);
     for (const L of ['drones', 'gears', 'pads', 'hearts', 'scraps']) run[L] = run[L].filter(keep);
@@ -842,6 +844,14 @@ function update(dt) {
   }
   if (run.freeze > 0) { run.freeze -= dt; return; }  // tiny hit-stop on big moments
   const gd = run.gravDir;
+  if (FX().helper && run.marks && run.started) {
+    const cnt = save.seen.spotHint || (save.seen.spotHint = {});
+    run.hintMark = null;
+    for (const m of run.marks) { if (m.done) continue; const sx = m.x - run.dist;
+      if (sx < BX - 30) { m.done = true; if (m.hinted) { cnt[m.kind] = (cnt[m.kind] || 0) + 1; persist(); } continue; }
+      if (sx < BX + 300 && (cnt[m.kind] || 0) < 3) { m.hinted = true; run.hintMark = m; break; } }
+    run.marks = run.marks.filter(m => !m.done || m.x - run.dist > -200);
+  }
   run.t += dt; if (run.boost) for (const k in run.boost) run.boost[k] = Math.max(0, run.boost[k] - dt);
   if (run.gift) { run.gift.t += dt; if (run.gift.t > 2.6) run.gift = null; } if (FX().music && !FX().clean) music(dt); if (FX().emote) trackEmotes(dt);
   if (FX().flow && run.chain > 0) { run.chainT -= dt; if (run.chainT <= 0) run.chain = 0; }
@@ -2226,6 +2236,14 @@ function drawHUD() {
     ctx.globalAlpha = 1;
   }
   if (zoneToast.t > 0) { ctx.globalAlpha = Math.min(1, zoneToast.t); text(zoneToast.txt.toUpperCase(), W / 2, 170, 22, PXC.white); ctx.globalAlpha = 1; }
+  if (FX().helper && run.hintMark && !run.dying) {                // a small hand by Rivet acts out the move for the next trick spot
+    const m = run.hintMark, tt = performance.now() / 1000, bx = BX * ZS, by = run.bird.y * ZS, hx = Math.round((bx + 46) / 2) * 2, hy = Math.round(Math.min(H - 120, Math.max(110, by + 30)) / 2) * 2;
+    const col = m.kind === 'glide' ? PXC.cyan : m.kind === 'dash' ? PXC.orange : PXC.yellow;
+    if (m.kind === 'glide') { const k = (tt * 1.2) % 1, down = k < 0.75; drawHand(hx, hy + (down ? 4 : 0), true); if (down) { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, hy - 18, 6 + k * 14, 0, 7); ctx.stroke(); } }
+    else if (m.kind === 'dash') { const k = (tt * 1.6) % 1; drawHand(hx - 12 + k * 40, hy, true); ctx.fillStyle = col; for (let q = 0; q < 3; q++) ctx.fillRect(hx - 22 + q * 12, hy + 22, 8, 2); }
+    else { const k = (tt * 1.6) % 1; drawHand(hx, hy - 14 + k * 36, true); ctx.fillStyle = col; for (let q = 0; q < 3; q++) ctx.fillRect(hx + 20, hy - 14 + q * 12, 2, 8); }
+    text(m.kind === 'glide' ? 'HOLD' : m.kind === 'dash' ? 'SWIPE RIGHT' : 'SWIPE DOWN', hx + 4, hy + 34, 11, col);
+  }
   if (!run.started && !run.tut) {
     if (!FX().ui2) panel(40, H / 2 + 52, W - 80, 92, { fill: PXC.navy });
     text('TAP TO FLAP', W / 2, H / 2 + 80, FX().ui2 ? 28 + (Math.floor(performance.now() / 400) % 2) * 4 : 24, PXC.white);
