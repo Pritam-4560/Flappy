@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -128,26 +128,40 @@ const VERS = [
     notes: ['Crates are now brick walls', 'Fly into them: they burst apart, no damage', 'Bricks fly, spin, bounce and fade', 'A dash blasts a whole hole through', 'Spaceship preview, clearer upgrades'] },
   { v: '1.28', name: 'Little Helper', sum: 'A tiny hand shows each trick, three times.', visual: 'Hand hints at trick spots',
     notes: ['A small hand appears by Rivet before a spot', 'Glide runs: it shows HOLD', 'Brick walls: it shows SWIPE RIGHT', 'Dive drops: it shows SWIPE DOWN', 'After 3 times each, it trusts you'] },
+  { v: '1.29', name: 'Checkpoints', sum: 'Never lose your progress again.', visual: 'Checkpoints, continue button',
+    notes: ['Checkpoints at 500, 1200, 1900, 2500 m', 'Die? CONTINUE from your best checkpoint', 'Or pick FROM START for the full run', 'Updates never wipe your save again', 'Old saves are found and restored'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
-try { const sv = +localStorage.getItem('fl.ver'); if (sv >= 1 && sv <= LATEST) ver = sv; } catch (e) {}
+try { const raw = localStorage.getItem('fl.ver'), sv = +raw, was = +localStorage.getItem('fl.verMax'); if (raw === 'latest' || (sv && was && sv === was) || (sv && !was && sv >= 20)) ver = LATEST; else if (sv >= 1 && sv <= LATEST) ver = sv; } catch (e) {}
 const FX = () => VERS[ver - 1].f;
 
 // ---------- Save (each version keeps its own progress; the latest keeps the original key) ----------
 const saveKey = () => 'flapocalypse.v3' + (ver === LATEST ? '' : '.ver' + ver);
 let save;
+function rescueSave() {                                 // saves that an update stranded under an old version key come home
+  try {
+    if (ver !== LATEST || localStorage.getItem('fl.rescued') === String(LATEST)) return;
+    const base = 'flapocalypse.v3', score = s => s ? (s.runs || 0) * 1000 + (s.best || 0) + (s.scrap || 0) : -1;
+    let best = JSON.parse(localStorage.getItem(base) || 'null'), bestKey = base;
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); const m = k && k.match(/^flapocalypse\.v3\.ver(\d+)$/); if (!m || +m[1] < 19) continue; const s = JSON.parse(localStorage.getItem(k) || 'null'); if (score(s) > score(best)) { best = s; bestKey = k; } }
+    if (bestKey !== base && best) localStorage.setItem(base, JSON.stringify(best));
+    localStorage.setItem('fl.rescued', String(LATEST));
+  } catch (e) {}
+}
 function loadSave() {
+  rescueSave();
   save = { scrap: 0, best: 0, runs: 0, summits: 0, tier: { hull: 0, wing: 0, salv: 0 }, beaten: {}, cannon: {}, startAlt: 0, daily: null, seen: {}, looks: { skins: { classic: 1 }, hats: { none: 1 }, skin: 'classic', hat: 'none' } };
   try {
     const s = JSON.parse(localStorage.getItem(saveKey()) || '{}');
     Object.assign(save, s); save.tier = Object.assign({ hull: 0, wing: 0, salv: 0 }, s.tier); save.looks = Object.assign({ skins: { classic: 1 }, hats: { none: 1 }, skin: 'classic', hat: 'none' }, s.looks || {});
     save.beaten = s.beaten || {}; save.cannon = s.cannon || {}; save.seen = s.seen || {};
+    if (save.cp === undefined) save.cp = save.best >= 2500 ? 2500 : save.best >= 1900 ? 1900 : save.beaten[1] ? 1200 : save.beaten[0] ? 500 : 0;
   } catch (e) {}
 }
 loadSave();
 const persist = () => { try { localStorage.setItem(saveKey(), JSON.stringify(save)); } catch (e) {} };
-function selectVer(v) { ver = v; try { localStorage.setItem('fl.ver', String(v)); } catch (e) {} loadSave(); dailyMode = false; newRun(); }
+function selectVer(v) { ver = v; try { localStorage.setItem('fl.ver', v === LATEST ? 'latest' : String(v)); localStorage.setItem('fl.verMax', String(LATEST)); } catch (e) {} loadSave(); dailyMode = false; newRun(); }
 
 // ---------- Workshop (permanent upgrades) ----------
 const TIER_COST = [60, 300, 1000, 2500];
@@ -518,7 +532,7 @@ function startRun(daily, startAlt) {
   seedRand = dailyMode ? mulberry(seed) : Math.random;
   pickRand = dailyMode ? mulberry(seed ^ 0x9e3779b9) : Math.random;
   state = 'play'; newRun();
-  if (typeof startAlt === 'number') { run.dist = startAlt * PPM; run.maxM = startAlt; run.pipes = []; run.genX = run.dist + VW + 240; run.gi = GUARDS.findIndex(g => g.alt > startAlt); run.nextBubble = nextBubbleFrom(startAlt); genPipes(); }
+  if (typeof startAlt === 'number') { run.dist = startAlt * PPM; run.maxM = startAlt; run.startAlt = startAlt; run.pipes = []; run.genX = run.dist + VW + 240; run.gi = GUARDS.findIndex(g => g.alt > startAlt); run.nextBubble = nextBubbleFrom(startAlt); genPipes(); }
 }
 
 // ---------- World generation (ahead of the camera, never depends on the player) ----------
@@ -815,7 +829,7 @@ function updateFight(dt) {
 function endFight() {
   const F = run.fight, g = GUARDS[F.gi];
   if (FX().ship && !FX().bossfx && F.gi === GUARDS.length - 1) { shake = 14; flash = { c: '#fee761', a: .6 }; for (let i = 0; i < 90; i++) { const a = Math.random() * 6.28, s = rng(60, 420); parts.push({ x: VW - 150 + rng(-80, 80), y: (F.shipY || VH / 2) + rng(-40, 40), vx: Math.cos(a) * s, vy: Math.sin(a) * s, l: rng(.5, 1.2), c: ['#fee761', '#feae34', '#f77622', '#e43b44', '#ffffff', '#e040ff'][i % 6] }); } SFX.stomp && SFX.stomp(8); }
-  save.beaten[F.gi] = true;
+  save.beaten[F.gi] = true; if (FX().cpts && F.gi < GUARDS.length - 1) save.cp = Math.max(save.cp || 0, g.alt);
   addScrap(g.reward / scrapMul(), VW / 2, 220);
   run.shields = Math.min(3, run.shields + 1); heal(1, 'GUARDIAN BONUS');
   run.fight = null; run.gi = F.gi + 1;
@@ -852,6 +866,7 @@ function update(dt) {
       if (sx < BX + 300 && (cnt[m.kind] || 0) < 3) { m.hinted = true; run.hintMark = m; break; } }
     run.marks = run.marks.filter(m => !m.done || m.x - run.dist > -200);
   }
+  if (FX().cpts && !run.tut && !dailyMode) for (const c of [1900, 2500]) if (run.maxM >= c && (save.cp || 0) < c) { save.cp = c; persist(); zoneToast = { txt: 'CHECKPOINT ' + fmt(c) + ' M', t: 2.2 }; SFX.milestone(); }
   run.t += dt; if (run.boost) for (const k in run.boost) run.boost[k] = Math.max(0, run.boost[k] - dt);
   if (run.gift) { run.gift.t += dt; if (run.gift.t > 2.6) run.gift = null; } if (FX().music && !FX().clean) music(dt); if (FX().emote) trackEmotes(dt);
   if (FX().flow && run.chain > 0) { run.chainT -= dt; if (run.chainT <= 0) run.chain = 0; }
@@ -2300,6 +2315,15 @@ function drawEnd() {
     pixBar(70, 342, W - 140, 14, f, f >= 1 ? PXC.cyan : PXC.gold);
   }
   const ok = () => performance.now() - deadAt > 500;
+  if (FX().cpts && save.cp > 0 && !dailyMode && !v) {
+    btn('CONTINUE  ' + fmt(save.cp) + ' M', 50, 380, W - 100, 54, () => { if (ok()) startRun(false, save.cp); }, { color: '#e0753a', size: 15 });
+    btn('FROM START', 50, 442, W - 100, 34, () => { if (ok()) startRun(false); }, { color: '#2a3350', size: 13 });
+    btn(FX().shop ? 'SHOP' : 'WORKSHOP', 50, 486, 140, 40, () => { if (ok()) { state = 'menu'; dailyMode = false; } }, { size: 14 });
+    const just2 = performance.now() - copied < 1800;
+    btn(just2 ? 'COPIED!' : 'SHARE', 210, 486, 140, 40, () => { if (ok()) shareRun(); }, { size: 14, color: '#2f9e5e' });
+    btn('TITLE', 50, 536, W - 100, 34, () => { if (ok()) { state = 'title'; dailyMode = false; } }, { size: 13, color: '#2a3350' });
+    return;
+  }
   btn('RUN IT BACK', 50, 384, W - 100, 62, () => { if (ok()) startRun(dailyMode); }, { color: '#e0753a', size: 24 });
   btn(FX().shop ? 'SHOP' : 'WORKSHOP', 50, 462, 140, 46, () => { if (ok()) { state = 'menu'; dailyMode = false; } }, { size: 15 });
   const just = performance.now() - copied < 1800;
@@ -2443,7 +2467,9 @@ function drawTitle() {
   pixTextDraw('FLAPOCALYPSE', W / 2, 150, 40, PXC.yellow, 'center', PXC.ink);
   panel(W / 2 - 112, 190, 224, 34);
   text(`V${V.v} · ${V.name}`, W / 2, 207, 14, PXC.yellow);
-  btn('PLAY', 60, 300, 280, 66, () => (FX().tut && !save.seen.tut && !save.runs ? startTutorial() : startRun(false)), { color: '#e0753a', size: 30 });
+  const cpOn = FX().cpts && save.cp > 0;
+  btn('PLAY', 60, 300, 280, 66, () => (FX().tut && !save.seen.tut && !save.runs ? startTutorial() : cpOn ? startRun(false, save.cp) : startRun(false)), { color: '#e0753a', size: 30 });
+  if (cpOn) text('FROM ' + fmt(save.cp) + ' M CHECKPOINT', W / 2, 356, 11, PXC.white);
   if (FX().tut) btn('HOW TO PLAY', 60, 508, 280, 40, () => startTutorial(), { color: '#2a3350', size: 14 });
   if (FX().workshop) btn(FX().shop ? 'SHOP' : 'WORKSHOP', 60, 384, 280, 48, () => { state = 'menu'; }, { color: '#3c6df0', size: 18 });
   btn('UPDATES', 60, FX().workshop ? 448 : 384, 280, 48, () => { pv = ver; cmp = 0.5; state = 'updates'; }, { color: '#7a4fe0', size: 18 });
@@ -2554,7 +2580,7 @@ function pointer(e) {
   const [x, y] = toLogical(e);
   for (const b of buttons) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { SFX.click(); pressFx = { x: b.x, y: b.y, t: performance.now() }; if (state !== 'play' && state !== 'pick') fadeA = 0.5; b.onClick(); return; }
   if (state === 'updates' && x >= PREV.x && x <= PREV.x + PREV.w && y >= PREV.y && y <= PREV.y + PREV.h) { dragging = true; cmp = clamp((x - PREV.x) / PREV.w, 0.03, 0.97); return; }
-  if ((state === 'dead' || state === 'victory') && FX().polish && performance.now() - deadAt > 700) { startRun(dailyMode); return; }   // tap anywhere to run it back
+  if ((state === 'dead' || state === 'victory') && FX().polish && performance.now() - deadAt > 700) { (FX().cpts && save.cp > 0 && !dailyMode && state === 'dead' ? startRun(false, save.cp) : startRun(dailyMode)); return; }   // tap anywhere to run it back
   if (FX().taps) tapStart(y, x); else flap();
 }
 cv.addEventListener('pointerdown', pointer);
