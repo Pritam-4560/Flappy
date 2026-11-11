@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -130,6 +130,8 @@ const VERS = [
     notes: ['A small hand appears by Rivet before a spot', 'Glide runs: it shows HOLD', 'Brick walls: it shows SWIPE RIGHT', 'Dive drops: it shows SWIPE DOWN', 'After 3 times each, it trusts you'] },
   { v: '1.29', name: 'Checkpoints', sum: 'Never lose your progress again.', visual: 'Checkpoints, continue button',
     notes: ['Checkpoints at 500, 1200, 1900, 2500 m', 'Die? CONTINUE from your best checkpoint', 'Or pick FROM START for the full run', 'Updates never wipe your save again', 'Old saves are found and restored'] },
+  { v: '1.30', name: 'Flip Out', sum: 'Upside down? You cannot get hurt.', visual: 'Invincible gravity flips',
+    notes: ['Gravity flips make Rivet invincible', 'Fly through pipes, drones, anything', 'A rainbow glow while flipped', 'Soft bounce off the ceiling, no damage', 'Just enjoy the ride'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -694,6 +696,7 @@ function heal(n, why) {
   run.hp = Math.min(run.maxHp, run.hp + n); SFX.heal(); float('+1 HEART', BX + 30, run.bird.y - 30, '#ff7aa8'); if (why) float(why, VW / 2, 150, '#ff7aa8'); flash = { c: '#f6757a', a: .22 };
 }
 function hurt(why) {
+  if (FX().flipsafe && run.gravDir < 0) return;                 // flipped gravity is a joyride: nothing can hurt you
   if (run.tut) run.hp = Math.max(2, run.hp);
   if (run.dying || run.invuln > 0 || run.boostT > 0) return;
   if (run.streak >= 5) float('streak lost', BX + 30, run.bird.y - 40, '#aaa');
@@ -1450,6 +1453,7 @@ function drawJunkBird() {
       if (FX().feel) { const bs = FX().clean ? 1 : 1.25; sx *= bs; sy *= bs; }
       if (FX().fdash && run.dashT > 0) { const k = 1 - run.dashT / 0.3; ox += Math.sin(k * Math.PI) * 34; sx *= 1.3; sy *= 0.82; rot = 0; oy = 0; for (let q = 3; q >= 1; q--) { ctx.save(); ctx.globalAlpha = 0.18 * (4 - q); ctx.translate(BX + ox - q * 18, b.y); ctx.scale(sx, sy); ctx.translate(-BX, -b.y); drawRivetSprite(BX, b.y, c[0], c[1], false, false, 1, run.gravDir < 0); ctx.restore(); } }
       ctx.save(); ctx.translate(BX + ox, b.y + oy); ctx.rotate(rot); ctx.scale(sx, sy); ctx.translate(-BX, -b.y);
+      if (FX().flipsafe && run.gravDir < 0) { const cols = ['#e43b44', '#feae34', '#fee761', '#63c74d', '#2ce8f5', '#b55088']; for (let q = 0; q < 6; q++) { const a = q * 1.047 + run.t * 5; ctx.fillStyle = cols[q]; ctx.fillRect(Math.round((BX + Math.cos(a) * 34) / 4) * 4, Math.round((b.y + Math.sin(a) * 34) / 4) * 4, 8, 8); } for (let q = 1; q <= 5; q++) { ctx.fillStyle = cols[(q + Math.floor(run.t * 10)) % 6]; ctx.fillRect(Math.round((BX - 16 - q * 12) / 4) * 4, Math.round((b.y - 2 + Math.sin(run.t * 12 + q) * 4) / 4) * 4, 8, 8); } }
       drawRivetSprite(BX, b.y, c[0], c[1], run.feverT > 0, run.shields > 0, blink ? .4 : 1, run.gravDir < 0);
       ctx.save(); ctx.translate(Math.round(BX / 4) * 4, Math.round(b.y / 4) * 4); if (run.gravDir < 0) ctx.scale(1, -1); ctx.globalAlpha = blink ? .4 : 1; drawFace(m.type, k, t); ctx.restore();
       ctx.restore();
@@ -2224,7 +2228,7 @@ function drawHUD() {
   if (FX().boosts && run.boost) { let by = 98; for (const [k, lab, col, max] of [['magnet', 'MAGNET', PXC.cyan, 5], ['x2', 'X2 COINS', PXC.yellow, 5]]) { const v = run.boost[k] || 0; if (v <= 0) continue; text(lab, W - 14, by, 11, col, 'right'); ctx.fillStyle = PXC.ink; ctx.fillRect(W - 78, by + 8, 64, 6); ctx.fillStyle = col; ctx.fillRect(W - 76, by + 10, Math.round(60 * v / max / 2) * 2, 2); by += 22; } }
   if (run.streak >= 3) { if (FX().boosts) text('STREAK ' + run.streak + (run.streak >= 5 ? ' +' + Math.min(60, run.streak * 4) + '%' : ''), W - 14, 78, 11, PXC.yellow, 'right'); else text('STREAK ' + run.streak + (run.streak >= 5 ? '  +' + Math.min(60, run.streak * 4) + '%' : ''), 14, 86 + yo, 12, PXC.yellow, 'left'); }
   if (FX().polish && run.fight && run.fight.age < 1.6 && ((run.fight.age * 6) | 0) % 2 === 0) { ctx.fillStyle = PXC.ink; ctx.fillRect(0, H / 2 - 48, W, 96); ctx.fillStyle = '#a22633'; ctx.fillRect(0, H / 2 - 44, W, 88); text('WARNING', W / 2, H / 2 - 12, 34, PXC.white); text(GUARDS[run.fight.gi].name.toUpperCase(), W / 2, H / 2 + 26, 16, PXC.yellow); }
-  if (run.gravDir < 0 && (run.gravT > 1.5 || ((run.t * 6) | 0) % 2 === 0)) text('GRAVITY FLIPPED  ' + Math.ceil(run.gravT) + 'S', W / 2, 146, 13, PXC.pink);
+  if (run.gravDir < 0 && (run.gravT > 1.5 || ((run.t * 6) | 0) % 2 === 0)) text(FX().flipsafe ? 'FLIPPED + INVINCIBLE  ' + Math.ceil(run.gravT) + 'S' : 'GRAVITY FLIPPED  ' + Math.ceil(run.gravT) + 'S', W / 2, 146, 13, PXC.pink);
   if (run.afterBoost > 0 && ((run.t * 4) | 0) % 2 === 0) text('INVINCIBLE - FIND YOUR RHYTHM', W / 2, 126, 13, PXC.cyan);
   else if (run.hint && (FX().feel || ((run.t * 3) | 0) % 2 === 0)) { if (FX().feel && !FX().ui2) { const hw = tw(run.hint, 14) + 20; ctx.fillStyle = PXC.ink; ctx.fillRect(Math.round((W - hw) / 4) * 4, 112, Math.round(hw / 4) * 4, 28); } text(run.hint, W / 2, 126, 14, ((run.t * 3) | 0) % 2 === 0 ? PXC.yellow : PXC.white); }
   if (FX().fever) {
