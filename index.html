@@ -121,7 +121,7 @@ const VERS = [
   { v: '1.24', name: 'Trick Spots', sum: 'Places built for glide, dash and dive.', visual: 'Glide runs, crate walls, drops',
     notes: ['GLIDE RUNS: long sloping coin trails', 'CRATE WALLS: spin dash smashes through', 'DIVE DROPS: steep coin chains, high to low', 'A sign shows which move to use', 'One every few pipes, in every zone'] },
   { v: '1.25', name: 'Dash', sum: 'Double tap is now a forward dash.', visual: 'Forward dash, cleaner signs',
-    notes: ['TAP TAP: a quick dash forward, no flip', 'Rivet lunges ahead in a straight line', 'Afterimages and speed lines', 'Still smashes crates, drones and gears', 'Cleaner floating signs and glide meter'] },
+    notes: ['TAP TAP: a quick dash forward, no flip', 'Rivet lunges ahead in a straight line', 'Afterimages and speed lines', 'Still smashes crates, drones and gears', 'Cleaner floating signs'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -604,7 +604,7 @@ function addPipe() {
       run.forceGy = gy; const cx = x0 + (x1 - x0) / 2 - 20;
       for (let k = -2; k <= 2; k++) run.crates.push({ x: cx, y: gy + k * 40, dead: false });
       for (let k = 1; k <= 3; k++) run.scraps.push({ x: cx + 40 + k * 34, y: gy, r: 12, v: k === 3 ? 5 : 1 });
-      run.signs.push({ x: x0 + 50, y: gy - 130, kind: 'double' });
+      if (!FX().fdash) run.signs.push({ x: x0 + 50, y: gy - 130, kind: 'double' });
     } else {
       p.gy = p.cy = lo2 + 20; const yLow = hi2 - 10; run.forceGy = yLow;
       const n = 8; for (let k = 0; k < n; k++) { const f = k / (n - 1); run.scraps.push({ x: x0 + 70 + f * 90, y: p.gy + 30 + (yLow - p.gy - 60) * f, r: 12, v: k === n - 1 ? 5 : 1 }); }
@@ -1413,7 +1413,7 @@ function drawJunkBird() {
         else if (run.dashT > 0) { ctx.save(); ctx.globalAlpha = Math.min(1, run.dashT * 2.5); ctx.strokeStyle = '#2ce8f5'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(BX, b.y, 30 + (0.42 - run.dashT) * 60, 0, 7); ctx.stroke(); ctx.fillStyle = '#ffffff'; for (let q = 0; q < 6; q++) { const a = q * 1.05 + run.t * 14; ctx.fillRect(Math.round((BX + Math.cos(a) * 30) / 4) * 4, Math.round((b.y + Math.sin(a) * 30) / 4) * 4, 4, 4); } ctx.restore(); }
         if (run.diveT > 0) { ctx.fillStyle = '#ffffff'; for (let q = 0; q < 5; q++) ctx.fillRect(Math.round((BX - 24 + q * 12) / 4) * 4, Math.round((b.y - 44 - ((run.t * 500 + q * 37) % 44)) / 4) * 4, 4, 16); }
         if (run.glide) { ctx.fillStyle = '#c0cbdc'; for (let q = 0; q < 3; q++) ctx.fillRect(Math.round((BX - 50 - ((run.t * 300 + q * 23) % 40)) / 4) * 4, Math.round((b.y - 12 + q * 12) / 4) * 4, 16, 4); }
-        if (FX().fdash && run.glideE !== undefined && run.glideE < 1.5) { for (let q = 0; q < 3; q++) { const on = run.glideE / 1.5 > q / 3 + 0.01, px = Math.round((BX - 14 + q * 10) / 4) * 4, py = Math.round((b.y - 40) / 4) * 4; ctx.fillStyle = '#181425'; ctx.fillRect(px - 2, py - 2, 8, 8); ctx.fillStyle = on ? (run.glide ? '#2ce8f5' : '#c0cbdc') : '#3a4466'; ctx.fillRect(px, py, 4, 4); } }
+        if (false && run.glideE !== undefined && run.glideE < 1.5) { for (let q = 0; q < 3; q++) { const on = run.glideE / 1.5 > q / 3 + 0.01, px = Math.round((BX - 14 + q * 10) / 4) * 4, py = Math.round((b.y - 40) / 4) * 4; ctx.fillStyle = '#181425'; ctx.fillRect(px - 2, py - 2, 8, 8); ctx.fillStyle = on ? (run.glide ? '#2ce8f5' : '#c0cbdc') : '#3a4466'; ctx.fillRect(px, py, 4, 4); } }
         else if (run.glideE !== undefined && run.glideE < 1.5) { const w = 40, f = run.glideE / 1.5; ctx.fillStyle = '#181425'; ctx.fillRect(BX - w / 2 - 4, Math.round((b.y + 32) / 4) * 4, w + 8, 12); ctx.fillStyle = '#3a4466'; ctx.fillRect(BX - w / 2, Math.round((b.y + 32) / 4) * 4 + 4, w, 4); ctx.fillStyle = run.glide ? '#2ce8f5' : '#8b9bb4'; ctx.fillRect(BX - w / 2, Math.round((b.y + 32) / 4) * 4 + 4, Math.round(w * f / 4) * 4, 4); }
       }
     }
