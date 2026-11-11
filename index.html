@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -116,6 +116,8 @@ const VERS = [
     notes: ['Step-by-step lessons that pause the game', 'A hand and spotlight show you each thing', 'Covers pipes, coins, drones, powers, fever', 'Coins and powers never overlap or hide', 'Find it on the title: HOW TO PLAY'] },
   { v: '1.22', name: 'Tap Tricks', sum: 'Four kinds of tap, four new moves.', visual: 'Glide, spin dash, dive',
     notes: ['TAP: flap, same as always', 'HOLD: glide, falling slowly (meter)', 'DOUBLE TAP: spin dash, smash drones', 'SWIPE DOWN: dive, stomp for double', 'Keys: hold Space, double Space, Down'] },
+  { v: '1.23', name: 'Boss Battles', sum: 'Grab an orb, Rivet fires it. Bosses blow up.', visual: 'Orb shots, boss explosions',
+    notes: ['Grab a blue orb: Rivet fires it', 'Shots hit with a flash and knockback', 'Every hit chips off a health block', 'Bosses shake, burst and crash down', 'GUARDIAN DOWN! banner, then the loot'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -710,9 +712,36 @@ function startFight() {
   run.pipes = []; run.drones = []; run.gears = []; run.pads = []; run.scraps = []; run.bolts = []; run.bubbles = []; run.hearts = []; run.gates = []; run.gravDir = 1; run.gravT = 0;
   if (!FX().polish) float(g.name.toUpperCase(), VW / 2, 200, '#ff6a3d'); shake = 8; flash = { c: '#ff6a3d', a: .3 }; if (FX().polish) SFX.warn();
 }
+function bossPos(F) {                            // where the boss is drawn, so shots and explosions land on it
+  const slide = Math.max(0, 1.2 - F.age) * 160;
+  if (FX().ship && F.gi === GUARDS.length - 1) return { x: VW - 150 + slide * 1.5, y: F.shipY || VH / 2, r: 90 };
+  return { x: VW - 72 + slide, y: VH / 2 + Math.sin(run.t * 1.2) * VH * 0.2, r: 56 };
+}
+function boom(x, y, n, s, cols) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, v = rng(s * 0.3, s); parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, l: rng(.35, .9), c: cols[i % cols.length] }); } }
 function updateFight(dt) {
   const F = run.fight, g = GUARDS[F.gi], b = run.bird, r = hitR();
-  F.age += dt; F.timer -= dt; F.hitT = Math.max(0, (F.hitT || 0) - dt);
+  F.age += dt; F.timer -= dt; F.hitT = Math.max(0, (F.hitT || 0) - dt); F.kick = Math.max(0, (F.kick || 0) - dt * 4);
+  if (FX().bossfx) {
+    F.shots = F.shots || [];
+    for (const s of F.shots) {                              // Rivet's orb shots home in on the boss
+      s.t += dt; const P = bossPos(F), k = Math.min(1, s.t / 0.38);
+      s.x = s.x0 + (P.x - 40 - s.x0) * k; s.y = s.y0 + (P.y - s.y0) * k - Math.sin(k * Math.PI) * 60;
+      if (k >= 1 && !s.hit) {
+        s.hit = true; F.hp--; F.hitT = 0.35; F.kick = 1; shake = 9; run.freeze = 0.07; SFX.stomp(6); SFX.hit();
+        boom(P.x - 30, s.y, 22, 320, ['#2ce8f5', '#ffffff', '#6fe3ff', '#fee761']); float(F.hp > 0 ? 'HIT!' : 'CRITICAL!', P.x - 40, P.y - 70, '#2ce8f5');
+        if (F.hp <= 0 && F.dying === undefined) { F.dying = 0; F.beams = []; F.cores = []; F.coreAt = 0; }
+      }
+    }
+    F.shots = F.shots.filter(s => !s.hit);
+    if (F.dying !== undefined) {                            // the death: shudder, chain explosions, a big blast, then it crashes down
+      F.dying += dt; run.invuln = Math.max(run.invuln, 0.5); const P = bossPos(F);
+      F.boomT = (F.boomT || 0) - dt;
+      if (F.dying < 1.6 && F.boomT <= 0) { F.boomT = 0.13; boom(P.x + rng(-P.r, P.r * 0.6), P.y + rng(-P.r * 0.5, P.r * 0.5), 14, 220, ['#fee761', '#feae34', '#f77622', '#e43b44', '#ffffff']); shake = Math.max(shake, 6); noise(0.12, 0.08); }
+      if (F.dying >= 1.6 && !F.bigBoom) { F.bigBoom = true; boom(P.x, P.y, 120, 520, ['#ffffff', '#fee761', '#feae34', '#f77622', '#e43b44', '#3a4466']); shake = 18; flash = { c: '#ffffff', a: .8 }; SFX.stomp(8); noise(0.5, 0.14); zoneToast = { txt: 'GUARDIAN DOWN!', t: 2.2 }; }
+      if (F.dying >= 2.6) endFight();
+      return;
+    }
+  }
   { const warn = F.beams.filter(m => m.t <= m.warn), tgt = warn.length ? (warn.reduce((s, m) => s + m.lane, 0) / warn.length + 0.5) * LANE_H : VH / 2 + Math.sin(run.t * 0.9) * VH * 0.22; F.shipY = (F.shipY || VH / 2) + (tgt - (F.shipY || VH / 2)) * Math.min(1, dt * 3); }
   if (F.timer <= 0) {
     const lanes = g.pat[F.step % g.pat.length]; F.step++;
@@ -731,16 +760,16 @@ function updateFight(dt) {
   for (const c of F.cores) {
     c.t += dt; c.x -= 170 * dt;
     if (!c.got && Math.hypot(BX - c.x, b.y - c.y) < 36) {
-      c.got = true; F.hp--; F.hitT = 0.3; shake = 6; SFX.hit(); float('HIT!', c.x, c.y, '#6fe3ff');
+      c.got = true; if (FX().bossfx) { F.shots.push({ x0: BX + 10, y0: b.y, x: BX, y: b.y, t: 0 }); SFX.ding && SFX.ding(); float('FIRE!', BX + 30, b.y - 26, '#2ce8f5'); } else { F.hp--; F.hitT = 0.3; shake = 6; SFX.hit(); float('HIT!', c.x, c.y, '#6fe3ff'); }
       for (let i = 0; i < 12; i++) parts.push({ x: c.x, y: c.y, vx: rng(-150, 150), vy: rng(-150, 150), l: .5, c: '#6fe3ff' });
     }
   }
   F.cores = F.cores.filter(c => !c.got && c.x > -30);
-  if (F.hp <= 0) endFight();
+  if (F.hp <= 0 && !FX().bossfx) endFight();
 }
 function endFight() {
   const F = run.fight, g = GUARDS[F.gi];
-  if (FX().ship && F.gi === GUARDS.length - 1) { shake = 14; flash = { c: '#fee761', a: .6 }; for (let i = 0; i < 90; i++) { const a = Math.random() * 6.28, s = rng(60, 420); parts.push({ x: VW - 150 + rng(-80, 80), y: (F.shipY || VH / 2) + rng(-40, 40), vx: Math.cos(a) * s, vy: Math.sin(a) * s, l: rng(.5, 1.2), c: ['#fee761', '#feae34', '#f77622', '#e43b44', '#ffffff', '#e040ff'][i % 6] }); } SFX.stomp && SFX.stomp(8); }
+  if (FX().ship && !FX().bossfx && F.gi === GUARDS.length - 1) { shake = 14; flash = { c: '#fee761', a: .6 }; for (let i = 0; i < 90; i++) { const a = Math.random() * 6.28, s = rng(60, 420); parts.push({ x: VW - 150 + rng(-80, 80), y: (F.shipY || VH / 2) + rng(-40, 40), vx: Math.cos(a) * s, vy: Math.sin(a) * s, l: rng(.5, 1.2), c: ['#fee761', '#feae34', '#f77622', '#e43b44', '#ffffff', '#e040ff'][i % 6] }); } SFX.stomp && SFX.stomp(8); }
   save.beaten[F.gi] = true;
   addScrap(g.reward / scrapMul(), VW / 2, 220);
   run.shields = Math.min(3, run.shields + 1); heal(1, 'GUARDIAN BONUS');
@@ -1803,13 +1832,21 @@ function drawWorld() {
     // the boss: a big pixel sprite that charges, fires and flinches
     const slide = Math.max(0, 1.2 - F.age) * 160, bx = VW - 72 + slide, by = VH / 2 + Math.sin(tt * 1.2) * VH * 0.2;
     const charging = F.beams.some(m3 => m3.t <= m3.warn), firing = F.beams.some(m3 => m3.t > m3.warn);
-    if (FX().ship && F.gi === GUARDS.length - 1 && shipOk) drawShip(VW - 150 + slide * 1.5, F.shipY || VH / 2, F, charging, firing, F.hitT > 0); else drawBoss(F.gi, bx, by, tt, charging, firing, F.hitT > 0);
+    const DY = F.dying, fallT = DY !== undefined ? Math.max(0, DY - 1.6) : 0, sh = DY !== undefined && DY < 1.6 ? Math.sin(tt * 70) * 6 : 0, kx = (F.kick || 0) * 18;
+    if (!(fallT > 0.95)) {
+      ctx.save(); const P0 = bossPos(F); ctx.translate(P0.x + sh + kx + fallT * 60, P0.y + fallT * fallT * 900); ctx.rotate(fallT * 1.6 + (F.kick || 0) * 0.12); ctx.translate(-P0.x, -P0.y);
+      if (DY !== undefined && Math.floor(tt * 16) % 2 === 0 && DY < 1.6) ctx.globalAlpha = 0.6;
+      if (FX().ship && F.gi === GUARDS.length - 1 && shipOk) drawShip(VW - 150 + slide * 1.5, F.shipY || VH / 2, F, charging && DY === undefined, firing && DY === undefined, F.hitT > 0 || DY !== undefined); else drawBoss(F.gi, bx, by, tt, charging && DY === undefined, firing && DY === undefined, F.hitT > 0 || (DY !== undefined && Math.floor(tt * 12) % 2 === 0));
+      ctx.restore();
+      if (DY !== undefined && DY < 1.6) { const P1 = bossPos(F); ctx.fillStyle = '#3a4466'; for (let q = 0; q < 6; q++) { const ph = (tt * 2 + q * 0.4) % 1.2; ctx.fillRect(Math.round((P1.x - 20 + q * 10 - ph * 30) / 4) * 4, Math.round((P1.y - 40 - ph * 90) / 4) * 4, 12 + ph * 12, 12 + ph * 12); } }
+    }
+    for (const s of (F.shots || [])) { for (let q = 1; q <= 4; q++) { ctx.globalAlpha = 0.25 * (5 - q) / 4; ctx.fillStyle = '#2ce8f5'; ctx.fillRect(Math.round((s.x - q * 10) / 4) * 4 - 6, Math.round(s.y / 4) * 4 - 6, 12, 12); } ctx.globalAlpha = 1; ctx.fillStyle = '#0099db'; ctx.beginPath(); ctx.arc(s.x, s.y, 14, 0, 7); ctx.fill(); ctx.fillStyle = '#2ce8f5'; ctx.beginPath(); ctx.arc(s.x, s.y, 10, 0, 7); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(s.x / 4) * 4 - 4, Math.round(s.y / 4) * 4 - 4, 8, 8); }
     // boss health: one block per hit left
     const kz = 0.8 / ZS, bw = 22 * kz, bn = gd.hits, bx0 = Math.round((VW - bn * (bw + 4 * kz)) / 2);
     ctx.fillStyle = '#181425'; ctx.fillRect(bx0 - 6 * kz, 118 * kz, bn * (bw + 4 * kz) + 8 * kz, 26 * kz);
     for (let q = 0; q < bn; q++) { ctx.fillStyle = q < F.hp ? (F.hitT > 0 && q === F.hp - 1 ? '#fff' : '#e43b44') : '#3a4466'; ctx.fillRect(bx0 + q * (bw + 4 * kz), 124 * kz, bw, 14 * kz); }
     text(gd.name.toUpperCase(), VW / 2, 108 * kz, 12 * kz, '#feae34');
-    if (F.age < 5) text('FLY INTO THE BLUE ORBS', VW / 2, 154 * kz, 11 * kz, '#b8e8ff');
+    if (F.age < 6 && F.dying === undefined) text(FX().bossfx ? 'GRAB BLUE ORBS: RIVET FIRES THEM!' : 'FLY INTO THE BLUE ORBS', VW / 2, 154 * kz, 11 * kz, '#b8e8ff');
   }
 }
 
