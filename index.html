@@ -149,7 +149,7 @@ function selectVer(v) { ver = v; try { localStorage.setItem('fl.ver', String(v))
 const TIER_COST = [60, 300, 1000, 2500];
 const BRANCHES = [
   { id: 'hull', name: 'Hull',    tiers: ['Start with 1 shield', 'Start with 2 shields', 'Tighter frame: smaller hitbox, gravity -5%', 'Phoenix Core: revive once per run'] },
-  { id: 'wing', name: 'Wings',   tiers: ['Pipe gaps +10 px', 'Flap power +6%', 'World moves 6% slower', 'Gaps +10 px more, Fever lasts 4 s longer'] },
+  { id: 'wing', name: 'Wings',   tiers: ['Wider pipe gaps', 'Flap power +6%', 'World moves 6% slower', 'Gaps +10 px more, Fever lasts 4 s longer'] },
   { id: 'salv', name: 'Salvage', tiers: ['+20% scrap', 'Distance bonus: 6 scrap per 10 m', 'Card bubbles offer 4 cards', '+50% scrap'], tiersLuck: ['+20% scrap', 'Distance bonus: 6 scrap per 10 m', 'Bubbles give 2 powers', '+50% scrap'] },
 ];
 const CANNONS = [{ g: 0, alt: 500, cost: 300 }, { g: 1, alt: 1200, cost: 900 }];
@@ -1101,7 +1101,7 @@ const ICONS = {
   '\u{1F6E1}': { rows: ['ooooo', 'oBWBo', 'oBBBo', 'oBBBo', 'oBBBo', '.oBo.', '..o..'], pal: { o: '#124e89', B: '#0099db', W: '#2ce8f5' } },   // shield
 };
 function pixTextDraw(t, x, y, size, c, align, outline) {
-  t = String(t).toUpperCase(); const chars = [...t], n = chars.length;
+  t = String(t).toUpperCase(); if (FX().boosts) t = t.replace(/SCRAP/g, 'COINS'); const chars = [...t], n = chars.length;
   let font = size <= 12.5 ? 3 : 5, u = font === 3 ? 2 : Math.max(2, Math.round(size / 7));
   const avail = (align === 'center' ? Math.min(2 * x, 2 * (W - x)) : align === 'left' ? W - x : x) - 8;
   const wid = (f, uu) => (n * (f === 5 ? 6 : 4) - 1) * uu;
@@ -2182,8 +2182,8 @@ function drawHUD() {
   const yo = FX().health ? (FE ? 6 : 22) : 0;
   if (FX().health) for (let i = 0; i < run.maxHp; i++) drawHeartPx(14 + i * 26, FE ? 42 : 56, 3, i < run.hp ? '#e43b44' : '#3a4466', i < run.hp ? '#f6757a' : null);
   if (run.shields) text('🛡 ' + run.shields, 14, 64 + yo, 15, PXC.cyan, 'left');
-  if (FX().boosts && run.boost) { let by = 104 + yo; for (const [k, lab, col, max] of [['magnet', 'MAGNET', PXC.cyan, 5], ['x2', 'X2 COINS', PXC.yellow, 5]]) { const v = run.boost[k] || 0; if (v <= 0) continue; text(lab, 14, by, 11, col, 'left'); ctx.fillStyle = PXC.ink; ctx.fillRect(14, by + 8, 64, 6); ctx.fillStyle = col; ctx.fillRect(16, by + 10, Math.round(60 * v / max / 2) * 2, 2); by += 22; } }
-  if (run.streak >= 3) text('STREAK ' + run.streak + (run.streak >= 5 ? '  +' + Math.min(60, run.streak * 4) + '%' : ''), 14, 86 + yo, 12, PXC.yellow, 'left');
+  if (FX().boosts && run.boost) { let by = 98; for (const [k, lab, col, max] of [['magnet', 'MAGNET', PXC.cyan, 5], ['x2', 'X2 COINS', PXC.yellow, 5]]) { const v = run.boost[k] || 0; if (v <= 0) continue; text(lab, W - 14, by, 11, col, 'right'); ctx.fillStyle = PXC.ink; ctx.fillRect(W - 78, by + 8, 64, 6); ctx.fillStyle = col; ctx.fillRect(W - 76, by + 10, Math.round(60 * v / max / 2) * 2, 2); by += 22; } }
+  if (run.streak >= 3) { if (FX().boosts) text('STREAK ' + run.streak + (run.streak >= 5 ? ' +' + Math.min(60, run.streak * 4) + '%' : ''), W - 14, 78, 11, PXC.yellow, 'right'); else text('STREAK ' + run.streak + (run.streak >= 5 ? '  +' + Math.min(60, run.streak * 4) + '%' : ''), 14, 86 + yo, 12, PXC.yellow, 'left'); }
   if (FX().polish && run.fight && run.fight.age < 1.6 && ((run.fight.age * 6) | 0) % 2 === 0) { ctx.fillStyle = PXC.ink; ctx.fillRect(0, H / 2 - 48, W, 96); ctx.fillStyle = '#a22633'; ctx.fillRect(0, H / 2 - 44, W, 88); text('WARNING', W / 2, H / 2 - 12, 34, PXC.white); text(GUARDS[run.fight.gi].name.toUpperCase(), W / 2, H / 2 + 26, 16, PXC.yellow); }
   if (run.gravDir < 0 && (run.gravT > 1.5 || ((run.t * 6) | 0) % 2 === 0)) text('GRAVITY FLIPPED  ' + Math.ceil(run.gravT) + 'S', W / 2, 146, 13, PXC.pink);
   if (run.afterBoost > 0 && ((run.t * 4) | 0) % 2 === 0) text('INVINCIBLE - FIND YOUR RHYTHM', W / 2, 126, 13, PXC.cyan);
@@ -2216,7 +2216,8 @@ function drawHUD() {
     if (!FX().ui2) panel(40, H / 2 + 52, W - 80, 92, { fill: PXC.navy });
     text('TAP TO FLAP', W / 2, H / 2 + 80, FX().ui2 ? 28 + (Math.floor(performance.now() / 400) % 2) * 4 : 24, PXC.white);
     text(FX().launch ? 'FLY THROUGH GAPS, STOMP DRONES' : 'FLY THROUGH THE GAPS, STOMP DRONES FROM ABOVE', W / 2, H / 2 + 108, 11, PXC.ice);
-    text('SPACE / CLICK / TAP', W / 2, H / 2 + 128, 11, PXC.mist);
+    if (FX().fdash) { text('HOLD = GLIDE    SWIPE RIGHT = DASH', W / 2, H / 2 + 128, 11, PXC.mist); text('SWIPE DOWN = DIVE', W / 2, H / 2 + 144, 11, PXC.mist); }
+    else text('SPACE / CLICK / TAP', W / 2, H / 2 + 128, 11, PXC.mist);
   }
 }
 function drawPick() {
@@ -2404,7 +2405,7 @@ function drawTitle() {
   const t = performance.now() / 1000, V = VERS[ver - 1];
   inWorld = true; drawMini(ver, t, 0, 0, W, H); inWorld = false; pixelate(0, 0, W, H, FX().clean ? 3 : 4); flushText();
   dimDither(1);
-  if (FX().feel && rivetOk) { ctx.save(); ctx.translate(W / 2, 264 + Math.round(Math.sin(t * 2.4) * 2) * 3); ctx.scale(1.5, 1.5); drawRivetSprite(0, 0, Math.floor(t * 12) % 8, 0, false, false, 1); ctx.restore(); }
+  if (FX().feel && rivetOk) { ctx.save(); ctx.translate(W / 2, (FX().boosts ? 268 : 264) + Math.round(Math.sin(t * 2.4) * 2) * 3); ctx.scale(FX().boosts ? 1.25 : 1.5, FX().boosts ? 1.25 : 1.5); drawRivetSprite(0, 0, Math.floor(t * 12) % 8, 0, false, false, 1); ctx.restore(); }
   pixTextDraw('FLAPOCALYPSE', W / 2, 150, 40, PXC.yellow, 'center', PXC.ink);
   panel(W / 2 - 112, 190, 224, 34);
   text(`V${V.v} · ${V.name}`, W / 2, 207, 14, PXC.yellow);
