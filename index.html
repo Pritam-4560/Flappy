@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -122,6 +122,8 @@ const VERS = [
     notes: ['GLIDE RUNS: long sloping coin trails', 'CRATE WALLS: spin dash smashes through', 'DIVE DROPS: steep coin chains, high to low', 'A sign shows which move to use', 'One every few pipes, in every zone'] },
   { v: '1.25', name: 'Dash', sum: 'Swipe right to dash forward.', visual: 'Forward dash, cleaner signs',
     notes: ['SWIPE RIGHT: a quick dash forward', 'Rivet lunges ahead in a straight line', 'Afterimages and speed lines', 'Still smashes crates, drones and gears', 'Cleaner floating signs'] },
+  { v: '1.26', name: 'Boost Up', sum: 'Every pickup gives a boost. No more signs.', visual: 'Boosts, wind and arrow cues',
+    notes: ['Coins top up your glide meter', 'Gems: 5 s coin MAGNET', 'Stomps and smashes: 5 s DOUBLE COINS', 'Hearts at full health give a shield', 'Wind trails and arrows instead of signs'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -358,7 +360,7 @@ const flapV    = () => 420 * (tl('wing') >= 2 ? 1.06 : 1) * (1 + 0.06 * cl('flap
 const maxFall  = () => 560 * Math.pow(0.75, cl('soft'));
 const hitR     = () => tl('hull') >= 3 ? 8 : 9;
 const gapBonus = () => (tl('wing') >= 1 ? 10 : 0) + (tl('wing') >= 4 ? 10 : 0) + 12 * cl('wide') + (run.feverT > 0 ? 26 : 0);
-const scrapMul = () => (1 + (tl('salv') >= 1 ? 0.2 : 0) + (tl('salv') >= 4 ? 0.5 : 0) + 0.4 * cl('surge') + Math.min(0.6, run.streak * 0.04)) * (run.feverT > 0 ? 2 : 1);
+const scrapMul = () => (run && run.boost && run.boost.x2 > 0 ? 2 : 1) * (1 + (tl('salv') >= 1 ? 0.2 : 0) + (tl('salv') >= 4 ? 0.5 : 0) + 0.4 * cl('surge') + Math.min(0.6, run.streak * 0.04)) * (run.feverT > 0 ? 2 : 1);
 const feverLen = () => 8 + (tl('wing') >= 4 ? 4 : 0);
 const payRate  = () => tl('salv') >= 2 ? 6 : 4;
 const mOf = () => run.dist / PPM;
@@ -535,6 +537,7 @@ function addPipe() {
   run.lastGy = gy; run.lastSp = sp;
   const p = { x: run.genX, w: FX().clean ? 60 : 58, gy, base, amp: slal ? 0 : z >= 1 ? grng(0, z >= 3 ? 70 : 50) : 0, ph: grng(0, 6.28), spd: grng(0.9, 1.7), z, passed: false, minEdge: 99, cy: gy, gap: base };
   run.pipes.push(p);
+  if (run.forceStill) { p.amp = 0; run.forceStill = false; p.still = true; }
   let bubbleHere = false;
   if (FX().cards && m >= run.nextBubble) {
     bubbleHere = true;
@@ -545,7 +548,7 @@ function addPipe() {
   const midX = run.genX + sp * 0.5, roll = seedRand(), gc = run.genCount++;
   // pipe variety, introduced zone by zone
   const kr = seedRand(); p.kind = 'normal'; p.slal = slal;
-  if (FX().pipes && gc > 3 && !bubbleHere && !slal) {
+  if (FX().pipes && gc > 3 && !bubbleHere && !slal && !p.still) {
     const tbl = [[0.20, 0.12, 0, 0, 0, 0], [0.20, 0.08, 0.18, 0.12, 0, 0], [0.16, 0.06, 0.14, 0.14, 0.14, 0], [0.14, 0.04, 0.12, 0.14, 0.12, 0.14], [0.14, 0.06, 0.12, 0.12, 0.12, 0.14]][z]; let acc = 0;
     for (const [i, k] of ['slider', 'spring', 'pinch', 'split', 'cheese', 'shutter'].entries()) { acc += tbl[i]; if (kr < acc) { p.kind = k; break; } }
   }
@@ -567,7 +570,7 @@ function addPipe() {
   if (FX().coins2) {
     const prev = run.pipes[run.pipes.length - 2];
     const ctr = q => { const gs = gapsOf(q), g = q.kind === 'cheese' ? gs[1] : gs[gs.length - 1]; return (g[0] + g[1]) / 2; };
-    if (FX().scrap && prev && gc > 0 && seedRand() < 0.55) {          // a coin path from the last gap to this one: fly well, get paid
+    if (FX().scrap && prev && gc > 0 && !(FX().boosts && prev.spot) && seedRand() < 0.55) {          // a coin path from the last gap to this one: fly well, get paid
       const yA = ctr(prev), yB = ctr(p), x0 = prev.x + prev.w + 24, x1 = p.x - 24, n = Math.max(3, Math.min(5, Math.floor((x1 - x0) / 64) + 1)), hop = Math.abs(yA - yB) < 70 ? 34 : 0;
       for (let k = 0; k < n; k++) { const f = k / (n - 1); run.scraps.push({ x: x0 + (x1 - x0) * f, y: yA + (yB - yA) * f - Math.sin(f * Math.PI) * hop, r: 12, v: 1 }); }
       if (gc % 9 === 3) run.scraps.push({ x: (x0 + x1) / 2, y: (yA + yB) / 2 - hop - 40, r: 13, v: 5 });
@@ -592,7 +595,7 @@ function addPipe() {
   if (FX().spots && FX().scrap && gc >= 6 && !run.fight && gc >= (run.nextSpot || 6) && !run.tut) {      // a trick spot built for one of the tap moves
     const kinds = ['glide', 'dash', 'dive'], kind = kinds[(run.spotN = (run.spotN || 0) + 1) % 3];
     run.nextSpot = gc + 5 + Math.floor(seedRand() * 3);
-    p.kind = 'normal'; p.amp = 0; p.slal = false;
+    p.kind = 'normal'; p.amp = 0; p.slal = false; p.spot = kind; if (FX().boosts) run.forceStill = true;
     const lo2 = run.lastLo, hi2 = run.lastHi, x0 = p.x + p.w, extra = kind === 'glide' ? 460 : 0, x1 = p.x + sp + extra;
     const keep = o => !(o.x > x0 - 10 && o.x < x1 + 10);
     for (const L of ['drones', 'gears', 'pads', 'hearts', 'scraps']) run[L] = run[L].filter(keep);
@@ -600,7 +603,7 @@ function addPipe() {
     if (kind === 'glide') {
       const yEnd = clamp(gy + 0.42 * (x1 - x0 - 80), lo2, hi2); run.forceGy = yEnd; run.genX += extra;
       const n = Math.floor((x1 - x0 - 80) / 44); for (let k = 0; k <= n; k++) { const f = k / n; run.scraps.push({ x: x0 + 40 + (x1 - x0 - 80) * f, y: gy + (yEnd - gy) * f, r: 12, v: k === n ? 5 : 1 }); }
-      run.signs.push({ x: x0 + 70, y: gy - 90, kind: 'hold' });
+      if (FX().boosts) (run.cues = run.cues || []).push({ kind: 'glide', x0: x0 + 40, x1: x1 - 40, y0: gy, y1: yEnd }); else run.signs.push({ x: x0 + 70, y: gy - 90, kind: 'hold' });
     } else if (kind === 'dash') {
       run.forceGy = gy; const cx = x0 + (x1 - x0) / 2 - 20;
       for (let k = -2; k <= 2; k++) run.crates.push({ x: cx, y: gy + k * 40, dead: false });
@@ -609,7 +612,7 @@ function addPipe() {
     } else {
       p.gy = p.cy = lo2 + 20; const yLow = hi2 - 10; run.forceGy = yLow;
       const n = 8; for (let k = 0; k < n; k++) { const f = k / (n - 1); run.scraps.push({ x: x0 + 70 + f * 90, y: p.gy + 30 + (yLow - p.gy - 60) * f, r: 12, v: k === n - 1 ? 5 : 1 }); }
-      run.signs.push({ x: x0 + 40, y: p.gy - 80, kind: 'swipe' });
+      if (FX().boosts) (run.cues = run.cues || []).push({ kind: 'dive', x0: x0 + 70, x1: x0 + 160, y0: p.gy + 30, y1: yLow - 30 }); else run.signs.push({ x: x0 + 40, y: p.gy - 80, kind: 'swipe' });
     }
   }
   if (FX().tidy) tidySpawns(p.x - 420);
@@ -629,6 +632,10 @@ function tapEnd() { tapDown = false; }
 function tapMove(y, x) { if (!tapDown || swiped || tapDownY == null || !FX().taps || state !== 'play') return; const quick = performance.now() - tapDownAt < 320, dx = x == null || tapDownX == null ? 0 : x - tapDownX, dy = y - tapDownY;
   if (FX().fdash && quick && dx > 34 && dx > Math.abs(dy) && (run.dashCD || 0) <= 0) { swiped = true; dash(); return; }
   if (dy > 34 && quick && dy > Math.abs(dx)) { swiped = true; dive(); } }
+function giveBoost(id, sec, label) {
+  run.boost = run.boost || {}; const fresh = !(run.boost[id] > 0); run.boost[id] = Math.max(run.boost[id] || 0, sec);
+  if (fresh) { float(label, BX + 30, run.bird.y - 44, id === 'magnet' ? '#2ce8f5' : '#fee761'); SFX.milestone(); }
+}
 function dash() {
   if (state !== 'play' || run.dying || !run.started) return;
   const b = run.bird, FD = FX().fdash; run.dashT = FD ? 0.3 : 0.42; run.dashCD = FD ? 0.9 : 1.1; b.vy = FD ? 0 : -flapV() * 0.75 * run.gravDir; run.lastFlap = run.t;
@@ -832,7 +839,8 @@ function update(dt) {
   }
   if (run.freeze > 0) { run.freeze -= dt; return; }  // tiny hit-stop on big moments
   const gd = run.gravDir;
-  run.t += dt; if (run.gift) { run.gift.t += dt; if (run.gift.t > 2.6) run.gift = null; } if (FX().music && !FX().clean) music(dt); if (FX().emote) trackEmotes(dt);
+  run.t += dt; if (run.boost) for (const k in run.boost) run.boost[k] = Math.max(0, run.boost[k] - dt);
+  if (run.gift) { run.gift.t += dt; if (run.gift.t > 2.6) run.gift = null; } if (FX().music && !FX().clean) music(dt); if (FX().emote) trackEmotes(dt);
   if (FX().flow && run.chain > 0) { run.chainT -= dt; if (run.chainT <= 0) run.chain = 0; }
   if (run.invuln > 0) run.invuln -= dt;
   if (run.feverT > 0) {
@@ -955,10 +963,10 @@ function update(dt) {
     if (d.dead) continue;
     const dx = BX - (d.x - run.dist), dy = b.y - d.y;
     if (Math.abs(dx) < 22 && Math.abs(dy) < 22) {
-      if (run.dashT > 0) { d.dead = true; run.stomps = (run.stomps || 0) + 1; addScrap(3, BX + 20, d.y); addFever(10); shake = 6; SFX.stomp(4); float('SMASH!', BX + 30, d.y - 14, '#2ce8f5'); for (let i = 0; i < 12; i++) parts.push({ x: BX + 10, y: d.y, vx: rng(-200, 200), vy: rng(-200, 100), l: .5, c: i % 2 ? '#2ce8f5' : '#9aa6c8' }); continue; }
+      if (run.dashT > 0) { d.dead = true; run.stomps = (run.stomps || 0) + 1; if (FX().boosts) giveBoost('x2', 5, 'DOUBLE COINS!'); addScrap(3, BX + 20, d.y); addFever(10); shake = 6; SFX.stomp(4); float('SMASH!', BX + 30, d.y - 14, '#2ce8f5'); for (let i = 0; i < 12; i++) parts.push({ x: BX + 10, y: d.y, vx: rng(-200, 200), vy: rng(-200, 100), l: .5, c: i % 2 ? '#2ce8f5' : '#9aa6c8' }); continue; }
       if (run.diveT > 0 && b.vy * gd > 40 && dy * gd < -2) addScrap(2, BX + 20, d.y - 20);
       if (b.vy * gd > 40 && dy * gd < -2) {
-        run.stomps = (run.stomps || 0) + 1; const fl = FX().flow; d.dead = true; b.vy = -600 * gd * (1 + 0.25 * cl('spring')); if (fl) { run.chain++; run.chainT = 1.8; run.freeze = 0.06; } addFever(10); addScrap(fl ? 2 * run.chain : 2, BX + 20, d.y); shake = fl ? 5 : 4; SFX.stomp(fl ? run.chain - 1 : 0);
+        run.stomps = (run.stomps || 0) + 1; const fl = FX().flow; d.dead = true; if (FX().boosts) giveBoost('x2', 5, 'DOUBLE COINS!'); b.vy = -600 * gd * (1 + 0.25 * cl('spring')); if (fl) { run.chain++; run.chainT = 1.8; run.freeze = 0.06; } addFever(10); addScrap(fl ? 2 * run.chain : 2, BX + 20, d.y); shake = fl ? 5 : 4; SFX.stomp(fl ? run.chain - 1 : 0);
         float(fl && run.chain > 1 ? 'STOMP x' + run.chain + '!' : 'STOMP!', BX + 30, d.y - 14, '#6fe3ff'); if (!save.seen.drone) { save.seen.drone = true; persist(); }
         for (let i = 0; i < 10; i++) parts.push({ x: BX, y: d.y, vx: rng(-120, 120), vy: rng(-160, 40), l: .45, c: '#9aa6c8' });
       } else hurt('a junk drone');
@@ -967,14 +975,14 @@ function update(dt) {
   for (const c of (run.crates || [])) {
     if (c.dead) continue; const cx = c.x - run.dist;
     if (BX + r > cx && BX - r < cx + 40 && b.y + r > c.y - 20 && b.y - r < c.y + 20) {
-      if (run.dashT > 0) { c.dead = true; addScrap(1, BX + 20, c.y); shake = 5; noise(0.12, 0.1); boom(cx + 20, c.y, 12, 240, ['#b86f50', '#733e39', '#e4a672', '#3e2731']); if (!run.smashFx || run.t - run.smashFx > 0.3) { float('SMASH!', BX + 30, c.y - 20, '#2ce8f5'); run.smashFx = run.t; } }
+      if (run.dashT > 0) { c.dead = true; addScrap(1, BX + 20, c.y); if (FX().boosts) { run.glideE = 1.5; run.dashCD = 0; if (!run.crateFx || run.t - run.crateFx > 0.5) { float('ENERGY!', BX + 30, c.y + 20, '#63c74d'); run.crateFx = run.t; } } shake = 5; noise(0.12, 0.1); boom(cx + 20, c.y, 12, 240, ['#b86f50', '#733e39', '#e4a672', '#3e2731']); if (!run.smashFx || run.t - run.smashFx > 0.3) { float('SMASH!', BX + 30, c.y - 20, '#2ce8f5'); run.smashFx = run.t; } }
       else hurt('a junk crate');
     }
   }
   run.gears = run.gears.filter(g => !g.dead);
   for (const gr of run.gears) {
     gr.y = gr.y0 + gr.amp * Math.sin(gr.ph + run.t * gr.spd); gr.a += dt * 6;
-    if (Math.hypot(BX - (gr.x - run.dist), b.y - gr.y) < 20 + r) { if (run.dashT > 0) { gr.dead = true; addScrap(3, BX + 20, gr.y); shake = 7; SFX.stomp(6); float('SMASH!', BX + 30, gr.y - 14, '#2ce8f5'); for (let i = 0; i < 14; i++) parts.push({ x: BX + 10, y: gr.y, vx: rng(-220, 220), vy: rng(-220, 100), l: .5, c: i % 2 ? '#c0703c' : '#feae34' }); } else hurt('a gear'); }
+    if (Math.hypot(BX - (gr.x - run.dist), b.y - gr.y) < 20 + r) { if (run.dashT > 0) { gr.dead = true; if (FX().boosts) giveBoost('x2', 5, 'DOUBLE COINS!'); addScrap(3, BX + 20, gr.y); shake = 7; SFX.stomp(6); float('SMASH!', BX + 30, gr.y - 14, '#2ce8f5'); for (let i = 0; i < 14; i++) parts.push({ x: BX + 10, y: gr.y, vx: rng(-220, 220), vy: rng(-220, 100), l: .5, c: i % 2 ? '#c0703c' : '#feae34' }); } else hurt('a gear'); }
   }
   for (const p of run.pads) {
     if (!p.got && Math.hypot(BX - (p.x - run.dist), b.y - p.y) < 28) {
@@ -983,16 +991,17 @@ function update(dt) {
   }
   for (const s of run.scraps) {
     const sx = s.x - run.dist;
-    if (cl('magnet')) {
-      const dx = BX - sx, dy = b.y - s.y, d = Math.hypot(dx, dy), R = 60 + 55 * cl('magnet');
+    const bMag = run.boost && run.boost.magnet > 0;
+    if (cl('magnet') || bMag) {
+      const dx = BX - sx, dy = b.y - s.y, d = Math.hypot(dx, dy), R = Math.max(60 + 55 * cl('magnet'), bMag ? 190 : 0);
       if (d < R && d > 1) { s.x += dx / d * 320 * dt; s.y += dy / d * 320 * dt; }
     }
     if (!s.got && Math.hypot(BX - (s.x - run.dist), b.y - s.y) < 12 + s.r) {
-      s.got = true; run.coinCombo = FX().flow && run.t - run.coinT < 0.9 ? run.coinCombo + 1 : 0; run.coinT = run.t; addScrap(s.v, BX + 20, s.y); addFever(s.risky ? 6 : 2); SFX.scrap(run.coinCombo);
+      s.got = true; run.coinCombo = FX().flow && run.t - run.coinT < 0.9 ? run.coinCombo + 1 : 0; run.coinT = run.t; addScrap(s.v, BX + 20, s.y); addFever(s.risky ? 6 : 2); SFX.scrap(run.coinCombo); if (FX().boosts) { run.glideE = Math.min(1.5, (run.glideE ?? 1.5) + 0.12); if (s.v >= 5) giveBoost('magnet', 5, 'MAGNET!'); }
       for (let i = 0; i < 5; i++) parts.push({ x: BX, y: s.y, vx: rng(-80, 80), vy: rng(-100, 40), l: .4, c: '#ffd24a' });
     }
   }
-  for (const h of run.hearts) { if (!h.got && Math.hypot(BX - (h.x - run.dist), b.y - h.y) < 28) { h.got = true; heal(1, ''); } }
+  for (const h of run.hearts) { if (!h.got && Math.hypot(BX - (h.x - run.dist), b.y - h.y) < 28) { h.got = true; if (FX().boosts && run.hp >= run.maxHp) { run.shields = Math.min(3, run.shields + 1); float('+1 SHIELD', BX + 30, b.y - 28, '#6fe3ff'); SFX.shield(); } else heal(1, ''); } }
   if (FX().health && run.hp === 1) { run.beatT -= dt; if (run.beatT <= 0) { SFX.beat(); run.beatT = 0.85; } }
   for (const bu of run.bubbles) {
     if (!bu.got && Math.hypot(BX - (bu.x - run.dist), b.y - bu.p.cy) < 28) { bu.got = true; SFX.hit(); if (!save.seen.bubble) { save.seen.bubble = true; persist(); } offerPick(false); return; }
@@ -1002,7 +1011,7 @@ function update(dt) {
   run.bolts = run.bolts.filter(bo => bo.t < bo.warn + bo.fire);
 
   const cut = run.dist - 200;
-  if (run.signs) run.signs = run.signs.filter(o => o.x > cut); if (run.crates) run.crates = run.crates.filter(o => o.x > cut - 40 && !o.dead);
+  if (run.signs) run.signs = run.signs.filter(o => o.x > cut); if (run.cues) run.cues = run.cues.filter(o => o.x1 > cut); if (run.crates) run.crates = run.crates.filter(o => o.x > cut - 40 && !o.dead);
   run.pipes = run.pipes.filter(o => o.x + o.w > cut); run.drones = run.drones.filter(o => o.x > cut && !o.dead);
   run.gears = run.gears.filter(o => o.x > cut); run.pads = run.pads.filter(o => o.x > cut && !o.got);
   run.hearts = run.hearts.filter(o => o.x > cut && !o.got); run.gates = run.gates.filter(o => o.x > cut); run.scraps = run.scraps.filter(o => o.x > cut && !o.got); run.bubbles = run.bubbles.filter(o => o.x > cut && !o.got);
@@ -1833,6 +1842,11 @@ function drawWorld() {
   for (const c of (run.crates || [])) { if (c.dead) continue; const x = Math.round((c.x - d) / 4) * 4, y = Math.round((c.y - 20) / 4) * 4; if (x < -50 || x > VW + 10) continue;
     ctx.fillStyle = '#3e2731'; ctx.fillRect(x, y, 40, 40); ctx.fillStyle = '#b86f50'; ctx.fillRect(x + 4, y + 4, 32, 32); ctx.fillStyle = '#e4a672'; ctx.fillRect(x + 4, y + 4, 32, 4);
     ctx.fillStyle = '#733e39'; for (let q = 0; q < 6; q++) { ctx.fillRect(x + 8 + q * 4, y + 8 + q * 4, 4, 4); ctx.fillRect(x + 28 - q * 4, y + 8 + q * 4, 4, 4); } ctx.fillRect(x + 4, y + 18, 32, 4); }
+  for (const c of (run.cues || [])) {                        // world cues: a wind stream along glide runs, falling arrows on dive drops
+    const ax = c.x0 - d, bx = c.x1 - d; if (bx < -40 || ax > VW + 40) continue; const L = c.x1 - c.x0, tt = run.t;
+    if (c.kind === 'glide') { for (let q = 0; q < 14; q++) { const f = ((q / 14) + tt * 0.35) % 1, side = q % 2 ? -1 : 1, x = ax + f * L, y = c.y0 + (c.y1 - c.y0) * f + side * (26 + (q % 3) * 6); ctx.globalAlpha = Math.sin(f * Math.PI) * 0.85; ctx.fillStyle = q % 3 ? '#ffffff' : '#2ce8f5'; ctx.fillRect(Math.round(x / 4) * 4, Math.round(y / 4) * 4, 28, 4); ctx.fillRect(Math.round((x + 28) / 4) * 4, Math.round((y - 4 * side) / 4) * 4, 12, 4); ctx.fillRect(Math.round((x + 40) / 4) * 4, Math.round((y - 8 * side) / 4) * 4, 4, 4); } ctx.globalAlpha = 1; }
+    else { const n = 4; for (let q = 0; q < n; q++) { const f = q / (n - 1), x = ax - 46 + (bx - ax) * f, y = c.y0 + (c.y1 - c.y0) * f, on = Math.floor(tt * 6) % n === q; ctx.fillStyle = on ? '#fee761' : '#feae34'; ctx.globalAlpha = on ? 1 : 0.55; for (let k = 0; k < 4; k++) { ctx.fillRect(Math.round((x - 24 + k * 8) / 4) * 4, Math.round((y + k * 8) / 4) * 4, 8, 8); ctx.fillRect(Math.round((x + 24 - k * 8) / 4) * 4, Math.round((y + k * 8) / 4) * 4, 8, 8); } } ctx.globalAlpha = 1; }
+  }
   if (FX().fdash) for (const s of (run.signs || [])) { const x = Math.round((s.x - d) / 4) * 4, y = Math.round((Math.max(130, Math.min(VH - 200, s.y)) + Math.sin(run.t * 3 + s.x) * 4) / 4) * 4; if (x < -80 || x > VW + 40) continue;
     const col = s.kind === 'hold' ? '#2ce8f5' : s.kind === 'double' ? '#f6757a' : '#fee761', tt = run.t, k = (tt * 2.5) % 1, press = s.kind === 'double' ? (k < 0.15 || (k > 0.3 && k < 0.45)) : s.kind === 'hold', dy = s.kind === 'swipe' ? Math.floor(((tt * 1.5) % 1) * 4) * 4 : press ? 4 : 0;
     const hand = (hx, hy) => { ctx.fillStyle = '#181425'; ctx.fillRect(hx + 2, hy - 2, 8, 12); ctx.fillRect(hx - 2, hy + 6, 20, 14); ctx.fillStyle = '#ffffff'; ctx.fillRect(hx + 4, hy, 4, 10); ctx.fillRect(hx, hy + 8, 16, 10); };
@@ -2168,6 +2182,7 @@ function drawHUD() {
   const yo = FX().health ? (FE ? 6 : 22) : 0;
   if (FX().health) for (let i = 0; i < run.maxHp; i++) drawHeartPx(14 + i * 26, FE ? 42 : 56, 3, i < run.hp ? '#e43b44' : '#3a4466', i < run.hp ? '#f6757a' : null);
   if (run.shields) text('🛡 ' + run.shields, 14, 64 + yo, 15, PXC.cyan, 'left');
+  if (FX().boosts && run.boost) { let by = 104 + yo; for (const [k, lab, col, max] of [['magnet', 'MAGNET', PXC.cyan, 5], ['x2', 'X2 COINS', PXC.yellow, 5]]) { const v = run.boost[k] || 0; if (v <= 0) continue; text(lab, 14, by, 11, col, 'left'); ctx.fillStyle = PXC.ink; ctx.fillRect(14, by + 8, 64, 6); ctx.fillStyle = col; ctx.fillRect(16, by + 10, Math.round(60 * v / max / 2) * 2, 2); by += 22; } }
   if (run.streak >= 3) text('STREAK ' + run.streak + (run.streak >= 5 ? '  +' + Math.min(60, run.streak * 4) + '%' : ''), 14, 86 + yo, 12, PXC.yellow, 'left');
   if (FX().polish && run.fight && run.fight.age < 1.6 && ((run.fight.age * 6) | 0) % 2 === 0) { ctx.fillStyle = PXC.ink; ctx.fillRect(0, H / 2 - 48, W, 96); ctx.fillStyle = '#a22633'; ctx.fillRect(0, H / 2 - 44, W, 88); text('WARNING', W / 2, H / 2 - 12, 34, PXC.white); text(GUARDS[run.fight.gi].name.toUpperCase(), W / 2, H / 2 + 26, 16, PXC.yellow); }
   if (run.gravDir < 0 && (run.gravT > 1.5 || ((run.t * 6) | 0) % 2 === 0)) text('GRAVITY FLIPPED  ' + Math.ceil(run.gravT) + 'S', W / 2, 146, 13, PXC.pink);
