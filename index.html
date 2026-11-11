@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -134,6 +134,8 @@ const VERS = [
     notes: ['Gravity flips make Rivet invincible', 'Fly through pipes, drones, anything', 'A rainbow glow while flipped', 'Soft bounce off the ceiling, no damage', 'Just enjoy the ride'] },
   { v: '1.31', name: 'Victory Lap', sum: 'Boss wins feel like wins.', visual: 'Coin shower, slow-mo, sky fade',
     notes: ['Slow-motion beat after the final blow', 'A shower of coins flies into Rivet', 'Loot and checkpoint shown one at a time', 'Calm stretch before the next pipes', 'The new zone fades in smoothly'] },
+  { v: '1.32', name: 'Clear Skies', sum: 'No more surprise lightning strikes.', visual: 'No yellow lightning columns',
+    notes: ['Removed the yellow lightning strips', 'Storm zones are fair again', 'The background storm still flashes', 'Bug fixes from a full-map test run', 'Almost there!'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -1057,7 +1059,7 @@ function update(dt) {
   for (const bu of run.bubbles) {
     if (!bu.got && Math.hypot(BX - (bu.x - run.dist), b.y - bu.p.cy) < 28) { bu.got = true; SFX.hit(); if (!save.seen.bubble) { save.seen.bubble = true; persist(); } offerPick(false); return; }
   }
-  if (z >= 3) { run.boltT -= dt; if (run.boltT <= 0) { run.bolts.push({ x: grng(VW * 0.48, VW * 0.95), t: 0, warn: 0.9, fire: 0.3 }); run.boltT = 3.6; } }
+  if (z >= 3 && !FX().nobolt) { run.boltT -= dt; if (run.boltT <= 0) { run.bolts.push({ x: grng(VW * 0.48, VW * 0.95), t: 0, warn: 0.9, fire: 0.3 }); run.boltT = 3.6; } }
   for (const bo of run.bolts) { bo.t += dt; if (bo.t > bo.warn && bo.t < bo.warn + bo.fire && Math.abs(BX - bo.x) < 24 + r) hurt('lightning'); }
   run.bolts = run.bolts.filter(bo => bo.t < bo.warn + bo.fire);
 
