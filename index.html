@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }, { brickfever: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }, { brickfever: 1 }, { songs3: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -142,6 +142,8 @@ const VERS = [
     notes: ['Glide, dive and dash work from run one', 'Weak at first: level them up at Bolt', 'Three levels each until unstoppable', 'NEW GAME on the title starts fresh', 'The story got a full animation pass'] },
   { v: '1.35', name: 'Brick Fever', sum: 'Fever turns every pipe to brick. Smash!', visual: 'Brick pipes during fever',
     notes: ['During fever every pipe turns to brick', 'Fly straight through: they shatter', 'Smashed holes stay open, safely', 'New part: Brick Fever, 3 levels', 'Fever lasts 5 s, up to 12 s maxed'] },
+  { v: '1.36', name: 'Soundtrack', sum: 'Twelve different songs. Rebalanced.', visual: 'New music everywhere',
+    notes: ['A new song for every zone and screen', 'Funk, rock, jazz shop, epic summit', 'Two boss themes, story and victory songs', 'Balance pass on coins and prices', 'Tap M to mute'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -375,13 +377,75 @@ function playStep(S, s, t, dur) {
     if (s % 2 === 0) mNoise(t, i % 4 === 2 ? 0.08 : 0.03, 0.035, 7000);
   } else if (i === 0) mKick(t, 0.22);
 }
+// ---------- 1.36: a real soundtrack: every song has its own scale, groove, bass, drums and instruments ----------
+const SC3 = { maj: [0, 0, 2, 4, 5, 7, 9, 11, 12, 14], min: [0, 0, 2, 3, 5, 7, 8, 10, 12, 14], dor: [0, 0, 2, 3, 5, 7, 9, 10, 12, 14], phr: [0, 0, 1, 3, 5, 7, 8, 10, 12, 13], hmin: [0, 0, 2, 3, 5, 7, 8, 11, 12, 14] };
+const SONGS3 = {
+  title:   { bpm: 112, key: 0,  sc: 'maj', prog: [0, 7, 9, 5],    q: 'MMmM', A: '5-3-5-8-' + '7-5-6---' + '5-3-1-3-' + '2-------', B: '8-8-7-6-' + '5-6-7---' + '8-7-6-5-' + '5-------', form: 'AABA', bass: 'pump', drums: 'four', wave: 'square', lead: 0.04, arp: true },
+  shop:    { bpm: 96,  key: 5,  sc: 'maj', prog: [0, 9, 2, 7],    q: 'MmmM', A: '3.5.6.5.' + '3.1.2...' + '3.5.6.8.' + '7.6.5...', B: '6.6.5.3.' + '2.3.5...' + '6.5.3.2.' + '1-------', form: 'AABA', bass: 'walk', drums: 'brush', wave: 'triangle', lead: 0.05, swing: 0.32 },
+  story:   { bpm: 76,  key: -3, sc: 'min', prog: [0, 8, 3, 10],   q: 'mMMM', A: '1---3---' + '5-------' + '4---3---' + '2-------', B: '5---6---' + '5---3---' + '2---3---' + '1-------', form: 'AB', bass: 'whole', drums: 'timp', wave: 'triangle', lead: 0.05, pad: true },
+  z0:      { bpm: 134, key: 0,  sc: 'maj', prog: [0, 5, 7, 5],    q: 'MMMM', A: '1.3.5.3.' + '4.6.8.6.' + '5.7.9.7.' + '8-5-1---', B: '8.7.8.5.' + '6.5.6.3.' + '4.3.4.5.' + '5-------', form: 'AABA', bass: 'bounce', drums: 'pop', wave: 'square', lead: 0.042, arp: true },
+  z1:      { bpm: 106, key: 2,  sc: 'dor', prog: [0, 5, 0, 5],    q: 'mMmM', A: '1..3.5..' + '4.3.1...' + '1..3.5.6' + '5-4-3---', B: '8.8..7.5' + '..6.5.3.' + '8.8..7.5' + '6-5-----', form: 'AABA', bass: 'funk', drums: 'funk', wave: 'sawtooth', lead: 0.03, swing: 0.14 },
+  z2:      { bpm: 152, key: -2, sc: 'min', prog: [0, 8, 10, 0],   q: 'mMMm', A: '1.1.8.1.' + '7.1.5.1.' + '1.1.8.1.' + '9-8-7-5-', B: '5.5.6.7.' + '8---7---' + '6.6.5.4.' + '5-------', form: 'AABA', bass: 'drive', drums: 'rock', wave: 'sawtooth', lead: 0.03, double: true },
+  z3:      { bpm: 142, key: 3,  sc: 'phr', prog: [0, 1, 0, -2],   q: 'mMmM', A: '1.2.1.5.' + '1.2.3.2.' + '1.2.1.5.' + '3-2-1---', B: '5.6.5.8.' + '7.6.5.6.' + '5.3.2.1.' + '2-------', form: 'AABA', bass: 'pulse', drums: 'tom', wave: 'triangle', lead: 0.05, arp: true },
+  z4:      { bpm: 118, key: 5,  sc: 'hmin', prog: [0, 8, 5, 7],   q: 'mMmM', A: '5---8---' + '7---5---' + '4---3---' + '2---7---', B: '8-7-8-9-' + '8-7-5---' + '4-5-6-7-' + '5-------', form: 'AABA', bass: 'oct', drums: 'half', wave: 'sawtooth', lead: 0.032, pad: true },
+  boss:    { bpm: 164, key: 0,  sc: 'hmin', prog: [0, 0, 8, 7],   q: 'mmMM', A: '1.1.3.1.' + '5.1.6.5.' + '1.1.3.1.' + '7.6.5.3.', B: '8.8.7.8.' + '6.6.5.6.' + '5.5.4.5.' + '7---5---', form: 'AABA', bass: 'drive', drums: 'double', wave: 'sawtooth', lead: 0.03 },
+  final:   { bpm: 172, key: -1, sc: 'phr', prog: [0, 1, -2, 1],   q: 'mMMM', A: '1.2.1.7.' + '1.2.3.5.' + '1.2.1.7.' + '6.5.3.2.', B: '8---7---' + '6---5---' + '8.7.6.5.' + '3-2-1---', form: 'AABA', bass: 'pulse', drums: 'blast', wave: 'sawtooth', lead: 0.03, pad: true },
+  end:     { bpm: 70,  key: -5, sc: 'min', prog: [0, 5, 3, 7],    q: 'mmMM', A: '5---4---' + '3---2---' + '3---4---' + '1-------', B: '3---5---' + '6---5---' + '4---2---' + '1-------', form: 'AB', bass: 'whole', drums: 'none', wave: 'triangle', lead: 0.05, pad: true },
+  victory: { bpm: 126, key: 2,  sc: 'maj', prog: [0, 5, 7, 0],    q: 'MMMM', A: '1.1.1.5-' + '4.4.4.2-' + '1.3.5.8-' + '8-------', B: '8.7.6.5.' + '6.5.4.3.' + '4.5.6.7.' + '8-------', form: 'AABA', bass: 'pump', drums: 'four', wave: 'square', lead: 0.045, arp: true },
+};
+function songNow3() {
+  if (state === 'story') return 'story';
+  if (state === 'menu') return 'shop';
+  if (state === 'victory') return 'victory';
+  if (state === 'dead') return 'end';
+  if ((state === 'play' || state === 'pick') && run) return run.fight ? (run.fight.gi === GUARDS.length - 1 ? 'final' : 'boss') : 'z' + (FX().smooth ? run.zone : zoneOf(mOf()));
+  return 'title';
+}
+function playStep3(S, s, t, dur) {
+  const fever = state === 'play' && run && run.feverT > 0, i = s % 16, bar = Math.floor(s / 16) % 4, sec = S.form[Math.floor(s / 64) % S.form.length];
+  if (S.swing && s % 2 === 1) t += dur * S.swing;
+  const root = S.prog[bar] + S.key, minor = S.q[bar] === 'm', tri = minor ? [0, 3, 7] : [0, 4, 7], B = f => 110 * Math.pow(2, f / 12);
+  // bass
+  const bs = S.bass, nb = (st, len, v = 0.17, f = root - 12) => mNote(t, B(f), dur * len, 'triangle', v);
+  if (bs === 'pump' && i % 2 === 0) nb(i, 1.6, 0.15, root - 12 + (i % 4 === 2 ? 12 : 0));
+  if (bs === 'bounce' && [0, 3, 6, 8, 10, 14].includes(i)) nb(i, 1.4, 0.16, root - 12 + (i === 6 || i === 14 ? 7 : 0));
+  if (bs === 'walk' && i % 4 === 0) { const nxt = S.prog[(bar + 1) % 4] + S.key, walk = [0, tri[1], 7, nxt - root + (nxt > root ? -1 : 1)][i / 4]; nb(i, 3.4, 0.17, root - 12 + walk); }
+  if (bs === 'funk' && [0, 3, 6, 7, 10, 12, 14].includes(i)) nb(i, i === 6 || i === 14 ? 0.6 : 1.2, 0.17, root - 12 + (i === 7 || i === 14 ? 12 : 0));
+  if (bs === 'drive' && i % 2 === 0) { nb(i, 1.2, 0.15); mNote(t, B(root), dur * 1, 'square', 0.02); }
+  if (bs === 'pulse') nb(i, 0.8, 0.12, root - 12 + (i % 8 === 6 ? 12 : 0));
+  if (bs === 'oct' && i % 4 === 0) nb(i, 3.6, 0.17, root - 12 + (i % 8 === 4 ? 12 : 0));
+  if (bs === 'whole' && i === 0) nb(i, 15, 0.14);
+  // pad and arp
+  if (S.pad && i === 0) tri.forEach(o => mNote(t, 220 * Math.pow(2, (root + o) / 12), dur * 15, 'triangle', 0.018));
+  if (S.arp || fever) mNote(t, 440 * Math.pow(2, (root + tri[s % 3] + (fever ? 12 : 0)) / 12), dur * 0.7, 'square', 0.011);
+  // melody
+  if (s % 2 === 0) {
+    const mel = sec === 'A' ? S.A : S.B, k = Math.floor(s / 2) % 32, ch = mel[k];
+    if (ch !== '.' && ch !== '-') { let hold = 1; while (mel[(k + hold) % 32] === '-' && hold < 8) hold++; const f = 440 * Math.pow(2, (S.key + SC3[S.sc][+ch]) / 12);
+      mLead(t, f, dur * 2 * hold * 0.9, S.wave, S.lead); if (S.double) mNote(t, f / 2, dur * 2 * hold * 0.8, 'square', 0.015); if (fever) mNote(t, f * 2, dur * 1.4, 'triangle', 0.018); }
+  }
+  // drums
+  const K = v => mKick(t, v), Sn = (v = 0.12, d = 0.13) => mNoise(t, d, v, 1400), Hh = (v = 0.03, d = 0.03) => mNoise(t, d, v, 7000), Tm = f => { const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.5, t + 0.2); g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25); o.connect(g); g.connect(mbus()); o.start(t); o.stop(t + 0.3); };
+  const d = S.drums, crash = s % 64 === 0;
+  if (d === 'four') { if (i % 4 === 0) K(0.45); if (i === 4 || i === 12) Sn(0.09); if (i % 2 === 1) Hh(0.03, 0.05); }
+  if (d === 'pop') { if (i === 0 || i === 8 || i === 10) K(0.5); if (i === 4 || i === 12) Sn(); if (i % 2 === 0) Hh(); }
+  if (d === 'brush') { if (i === 0 || i === 10) K(0.18); if (i === 4 || i === 12) mNoise(t, 0.18, 0.05, 2500); if (i % 4 === 2) Hh(0.02, 0.06); }
+  if (d === 'funk') { if (i === 0 || i === 7 || i === 10) K(0.5); if (i === 4 || i === 12) Sn(0.13, 0.1); if (i === 15 || i === 9) Sn(0.04, 0.05); Hh(i % 2 ? 0.015 : 0.03); }
+  if (d === 'rock') { if (i === 0 || i === 8 || i === 10) K(0.55); if (i === 4 || i === 12) Sn(0.14); if (i % 2 === 0) Hh(0.035, 0.05); if (bar === 3 && i >= 12) Sn(0.1, 0.08); }
+  if (d === 'tom') { if (i % 4 === 0) K(0.4); if (i === 4 || i === 12) Sn(0.1); if (bar % 2 === 1 && i >= 12) Tm(220 - (i - 12) * 30); Hh(0.02); }
+  if (d === 'half') { if (i === 0) K(0.6); if (i === 8) Sn(0.16, 0.2); if (i % 4 === 2) Hh(0.025, 0.06); }
+  if (d === 'double') { if (i % 2 === 0) K(0.45); if (i === 4 || i === 12) Sn(0.14); Hh(0.025); }
+  if (d === 'blast') { K(i % 2 ? 0.3 : 0.5); if (i % 4 === 2) Sn(0.12, 0.08); }
+  if (d === 'timp' && i === 0 && bar % 2 === 0) Tm(90);
+  if (crash && d !== 'none' && d !== 'brush' && d !== 'timp') mNoise(t, 0.7, 0.05, 5000);
+}
 function musicTick() {
   if (!AC || muted || !FX().clean || AC.state !== 'running') return;
-  const name = songNow(), S2 = !!FX().songs2, S = (S2 ? SONGS2 : SONGS)[name];
+  const S3 = !!FX().songs3, name = S3 ? songNow3() : songNow(), S2 = !!FX().songs2, S = S3 ? SONGS3[name] : (S2 ? SONGS2 : SONGS)[name];
   if (name !== MUS.song) { MUS.song = name; MUS.step = 0; MUS.next = AC.currentTime + 0.06; }
   if (MUS.next < AC.currentTime) MUS.next = AC.currentTime + 0.03;
   const fever = state === 'play' && run && run.feverT > 0, dur = 60 / (S.bpm * (fever ? 1.12 : 1)) / 4;
-  while (MUS.next < AC.currentTime + 0.14) { (S2 ? playStep2 : playStep)(S, MUS.step, MUS.next, dur); MUS.next += dur; MUS.step++; }
+  while (MUS.next < AC.currentTime + 0.14) { (S3 ? playStep3 : S2 ? playStep2 : playStep)(S, MUS.step, MUS.next, dur); MUS.next += dur; MUS.step++; }
 }
 
 // ---------- Derived stats ----------
@@ -896,6 +960,7 @@ function addScrap(base, x, y) {
   run.scrap += n; if (n > 0) float('+' + n, x, y, '#ffd24a');
 }
 function addFever(n) {
+  if (FX().songs3 && FX().brickfever) n *= 0.55;                // brick fever makes pipes harmless, so it has to be earned
   if (FX().brickfever && run.feverT <= 0 && run.fever + n * Math.pow(1.4, cl('engine')) >= 100 && !run.fight) { setTimeout(() => { if (run && run.feverT > 0) { float('BRICK FEVER!', BX + 30, run.bird.y - 50, '#e43b44'); } }, 30); }
   if (!FX().fever || run.feverT > 0 || run.fight) return;
   run.fever = Math.min(100, run.fever + n * Math.pow(1.4, cl('engine')));
