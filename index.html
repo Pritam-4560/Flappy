@@ -14,6 +14,8 @@
 <style>
   html,body{margin:0;height:100%;background:#181425;overflow:hidden;touch-action:none;user-select:none;overscroll-behavior:none;-webkit-user-select:none}
   body{display:flex;align-items:center;justify-content:center}
+  body.banner{align-items:flex-start}
+  body.banner canvas{width:min(100vw,calc((100vh - 60px)*.625));width:min(100vw,calc((100dvh - 60px)*.625))}
   canvas{width:min(100vw,62.5vh);width:min(100vw,62.5dvh);height:auto;aspect-ratio:400/640;background:#141b2e;image-rendering:pixelated;-webkit-tap-highlight-color:transparent}
 </style>
 </head>
@@ -68,7 +70,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }, { brickfever: 1 }, { songs3: 1 }, { ads: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }, { brickfever: 1 }, { songs3: 1 }, { ads: 1 }, { banner: 1, noads: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -146,6 +148,8 @@ const VERS = [
     notes: ['A new song for every zone and screen', 'Funk, rock, jazz shop, epic summit', 'Two boss themes, story and victory songs', 'Balance pass on coins and prices', 'Tap M to mute'] },
   { v: '1.37', name: 'Quiet Ads', sum: 'Optional reward ads. Never during play.', visual: 'Revive, x2 coins, bonus coins',
     notes: ['Watch an ad to REVIVE once per run', 'Or to DOUBLE the coins from a run', 'Bolt gives bonus coins for an ad, 3 a day', 'A rare break between runs, never mid-run', 'No banners, no ads for new players'] },
+  { v: '1.38', name: 'Ad Free', sum: 'A small banner, or buy No Ads.', visual: 'Banner below the game, No Ads pack',
+    notes: ['A small banner under the game', 'It never covers the play area', 'Buy NO ADS once: banner and breaks gone', 'Rewarded ads stay optional', 'Restore purchase on a new phone'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -802,6 +806,7 @@ const ADS_CONFIG = {
   h5Client: '',                 // web: AdSense H5 Games Ads publisher id, e.g. 'ca-pub-1234567890123456'
   admobRewarded: '',            // app (Capacitor + AdMob plugin): rewarded ad unit id
   admobInterstitial: '',        // app: interstitial ad unit id
+  admobBanner: '',              // app: banner ad unit id
   test: true,                   // test ads until the accounts are approved
   breakEveryRuns: 4,            // an interstitial at most once every N finished runs ...
   breakMinGapSec: 240,          // ... and never more often than this
@@ -834,7 +839,7 @@ const Ads = {
   },
   maybeBreak(next) {                                  // the only unrequested ad: between runs, rare, never for new players
     this.runsSince++;
-    const ok = this.on() && !this.busy && save.runs >= ADS_CONFIG.newPlayerRuns && this.runsSince >= ADS_CONFIG.breakEveryRuns && Date.now() - this.lastAd > ADS_CONFIG.breakMinGapSec * 1000;
+    const ok = this.on() && !(typeof Store !== 'undefined' && Store.owned) && !this.busy && save.runs >= ADS_CONFIG.newPlayerRuns && this.runsSince >= ADS_CONFIG.breakEveryRuns && Date.now() - this.lastAd > ADS_CONFIG.breakMinGapSec * 1000;
     if (!ok) { next(); return; }
     this.runsSince = 0; this.busy = true; this.quiet(true); const done = () => { this.busy = false; this.quiet(false); this.lastAd = Date.now(); next(); };
     if (this.kind === 'mock') { adMock = { t0: performance.now(), name: 'break', end: () => { adMock = null; done(); } }; return; }
@@ -857,7 +862,52 @@ function reviveRun() {                               // watched an ad on the dea
   run.gravDir = 1; run.gravT = 0; fadeA = 0.5; shake = 6; flash = { c: '#2ce8f5', a: .5 }; float('REVIVED!', BX + 30, run.bird.y - 40, '#2ce8f5'); SFX.milestone && SFX.milestone();
 }
 function adDayCount() { const today = todayStr(); if (!save.adDay || save.adDay.d !== today) save.adDay = { d: today, n: 0 }; return save.adDay.n; }
-Ads.init();
+// ---------- 1.38: a bottom banner that never covers the game, and a No Ads pack ----------
+const NOADS_ID = 'no_ads';                                   // the product id to create in Play Console / App Store Connect
+const ADMOB_TEST_BANNER = 'ca-app-pub-3940256099942544/6300978111';
+const Store = {
+  owned: false, price: '', ready: false,
+  init() {
+    try { this.owned = localStorage.getItem('fl.noAds') === '1'; } catch (e) {}
+    const go = () => { const C = window.CdvPurchase; if (!C || !C.store || this.ready) return; this.ready = true; const { store, ProductType, Platform } = C;
+      store.register([{ id: NOADS_ID, type: ProductType.NON_CONSUMABLE, platform: Platform.GOOGLE_PLAY }, { id: NOADS_ID, type: ProductType.NON_CONSUMABLE, platform: Platform.APPLE_APPSTORE }]);
+      store.when().productUpdated(p => { if (p.id !== NOADS_ID) return; const o = p.getOffer && p.getOffer(); this.price = (o && o.pricingPhases && o.pricingPhases[0] && o.pricingPhases[0].price) || this.price; if (p.owned) this.grant(); })
+        .approved(tr => { if (tr.products && tr.products.some(x => x.id === NOADS_ID)) this.grant(); tr.finish(); });
+      store.initialize([Platform.GOOGLE_PLAY, Platform.APPLE_APPSTORE]); };
+    go(); document.addEventListener('deviceready', go, false);
+  },
+  grant() { const fresh = !this.owned; this.owned = true; try { localStorage.setItem('fl.noAds', '1'); } catch (e) {} Ads.hideBanner(); if (fresh) { noAdsMsg = { t: performance.now(), txt: 'ADS REMOVED. THANK YOU!' }; SFX.milestone && SFX.milestone(); } },
+  buy() {
+    const C = window.CdvPurchase;
+    if (C && C.store && this.ready) { const p = C.store.get(NOADS_ID), o = p && p.getOffer(); if (o) { o.order(); return; } noAdsMsg = { t: performance.now(), txt: 'STORE NOT READY, TRY AGAIN' }; return; }
+    if (Ads.mock) { this.grant(); return; }
+    noAdsMsg = { t: performance.now(), txt: 'AVAILABLE IN THE MOBILE APP' };
+  },
+  restore() { const C = window.CdvPurchase; if (C && C.store && this.ready) { C.store.restorePurchases(); noAdsMsg = { t: performance.now(), txt: 'RESTORING...' }; } else noAdsMsg = { t: performance.now(), txt: 'AVAILABLE IN THE MOBILE APP' }; },
+};
+let noAdsOpen = false, noAdsMsg = { t: 0, txt: '' };
+Ads.showBanner = function () {
+  if (!FX().banner || Store.owned || this.kind === 'none' || this.bannerOn) return;
+  this.bannerOn = true; document.body.classList.add('banner');
+  if (this.kind === 'admob') { this.admob.showBanner({ adId: ADS_CONFIG.admobBanner || ADMOB_TEST_BANNER, adSize: 'ADAPTIVE_BANNER', position: 'BOTTOM_CENTER', margin: 0, isTesting: ADS_CONFIG.test }).catch(() => {}); return; }
+  if (this.kind === 'mock') { const d = document.createElement('div'); d.id = 'mockBanner'; d.textContent = 'TEST BANNER AD'; d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:56px;display:flex;align-items:center;justify-content:center;background:#3a4466;color:#fee761;font:bold 14px monospace;letter-spacing:2px;border-top:4px solid #181425'; document.body.appendChild(d); }
+};
+Ads.hideBanner = function () {
+  if (!this.bannerOn) return; this.bannerOn = false; document.body.classList.remove('banner');
+  if (this.kind === 'admob') { try { this.admob.removeBanner(); } catch (e) {} }
+  const d = document.getElementById('mockBanner'); if (d) d.remove();
+};
+function drawNoAds() {
+  dimDither(3); panel(26, 150, W - 52, 330);
+  pixTextDraw('NO ADS', W / 2, 192, 32, PXC.yellow, 'center', PXC.ink);
+  if (Store.owned) { text('YOU OWN NO ADS. THANK YOU!', W / 2, 250, 13, PXC.green); text('NO BANNERS, NO BREAKS.', W / 2, 274, 12, PXC.white); }
+  else { [['NO BANNER AT THE BOTTOM', PXC.white], ['NO BREAKS BETWEEN RUNS', PXC.white], ['REVIVE AND BONUS ADS STAY', PXC.mist], ['OPTIONAL, ONLY IF YOU WANT', PXC.mist], ['SUPPORTS RIVET AND BOLT!', PXC.pink]].forEach(([s, c], i) => text(s, W / 2, 238 + i * 20, 12, c));
+    btn(Store.price ? 'BUY  ' + Store.price : 'BUY NO ADS', 56, 350, W - 112, 44, () => Store.buy(), { color: '#e0753a', size: 16 });
+    btn('RESTORE PURCHASE', 56, 402, W - 112, 28, () => Store.restore(), { color: '#2a3350', size: 11 }); }
+  btn('CLOSE', 56, 438, W - 112, 28, () => { noAdsOpen = false; }, { color: '#2a3350', size: 12 });
+  if (performance.now() - noAdsMsg.t < 2200) text(noAdsMsg.txt, W / 2, 330, 12, PXC.cyan);
+}
+Ads.init(); Store.init(); setTimeout(() => Ads.showBanner(), 1200);
 function startRun(daily, startAlt) {
   fadeA = 0.7; paused = false; resumeT = 0;
   dailyMode = daily === true;
@@ -2881,6 +2931,8 @@ function drawTitle() {
   inWorld = true; drawMini(ver, t, 0, 0, W, H); inWorld = false; pixelate(0, 0, W, H, FX().clean ? 3 : 4); flushText();
   dimDither(1);
   if (resetAsk) { drawResetAsk(); return; }
+  if (noAdsOpen) { drawNoAds(); return; }
+  if (FX().noads && Ads.kind !== 'none') btn(Store.owned ? 'AD FREE' : 'NO ADS', 8, 16, 80, 28, () => { noAdsOpen = true; }, { color: Store.owned ? '#2a3350' : '#e0753a', size: 11 });
   if (FX().feel && rivetOk) { ctx.save(); ctx.translate(W / 2, (FX().boosts ? 268 : 264) + Math.round(Math.sin(t * 2.4) * 2) * 3); ctx.scale(FX().boosts ? 1.25 : 1.5, FX().boosts ? 1.25 : 1.5); drawRivetSprite(0, 0, Math.floor(t * 12) % 8, 0, false, false, 1); ctx.restore(); }
   pixTextDraw('FLAPOCALYPSE', W / 2, 150, 40, PXC.yellow, 'center', PXC.ink);
   panel(W / 2 - 112, 190, 224, 34);

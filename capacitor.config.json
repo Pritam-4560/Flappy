@@ -1,0 +1,9 @@
+{
+  "appId": "com.flapocalypse.game",
+  "appName": "Flapocalypse",
+  "webDir": "www",
+  "android": { "backgroundColor": "#181425" },
+  "plugins": {
+    "AdMob": { "initializeForTesting": true }
+  }
+}
