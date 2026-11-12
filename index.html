@@ -68,7 +68,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }, { brickfever: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -140,6 +140,8 @@ const VERS = [
     notes: ['A story: the Void Cruiser stripped Rivet', 'Start with only a flap, like real Flappy', 'Bolt sells parts: wings, fins, thruster, core', 'Each part unlocks a move, with an install show', 'The tutorial lets you try full power first'] },
   { v: '1.34', name: 'Level Up', sum: 'Basic moves from the start. Upgrade to unstoppable.', visual: 'Part levels, NEW GAME, better story',
     notes: ['Glide, dive and dash work from run one', 'Weak at first: level them up at Bolt', 'Three levels each until unstoppable', 'NEW GAME on the title starts fresh', 'The story got a full animation pass'] },
+  { v: '1.35', name: 'Brick Fever', sum: 'Fever turns every pipe to brick. Smash!', visual: 'Brick pipes during fever',
+    notes: ['During fever every pipe turns to brick', 'Fly straight through: they shatter', 'Smashed holes stay open, safely', 'New part: Brick Fever, 3 levels', 'Fever lasts 5 s, up to 12 s maxed'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -389,7 +391,7 @@ const maxFall  = () => 560 * Math.pow(0.75, cl('soft'));
 const hitR     = () => tl('hull') >= 3 ? 8 : 9;
 const gapBonus = () => (tl('wing') >= 1 ? 10 : 0) + (tl('wing') >= 4 ? 10 : 0) + 12 * cl('wide') + (run.feverT > 0 ? 26 : 0);
 const scrapMul = () => (run && run.boost && run.boost.x2 > 0 ? 2 : 1) * (1 + (tl('salv') >= 1 ? 0.2 : 0) + (tl('salv') >= 4 ? 0.5 : 0) + 0.4 * cl('surge') + Math.min(0.6, run.streak * 0.04)) * (run.feverT > 0 ? 2 : 1);
-const feverLen = () => 8 + (tl('wing') >= 4 ? 4 : 0);
+const feverLen = () => FX().brickfever ? [5, 7, 9, 12][partLv('fever')] + (tl('wing') >= 4 ? 2 : 0) : 8 + (tl('wing') >= 4 ? 4 : 0);
 const payRate  = () => tl('salv') >= 2 ? 6 : 4;
 const mOf = () => run.dist / PPM;
 
@@ -542,11 +544,12 @@ const PARTS = [
   { id: 'dash',  name: 'Thruster',    move: 'SWIPE RIGHT TO DASH', cost: 260, col: '#f77622', icon: ['........', '.XXXX...', 'XXXXXXX.', 'XXXXXXXX', 'XXXXXXX.', '.XXXX...', '........', '........'] },
   { id: 'core',  name: 'Power Core',  move: '? BUBBLES GIVE POWERS', cost: 340, col: '#b55088', icon: ['..XXXX..', '.XXXXXX.', 'XXX..XXX', 'XX....XX', 'XX....XX', 'XXX..XXX', '.XXXXXX.', '..XXXX..'] },
 ];
+const FEVER_PART = { id: 'fever', name: 'Brick Fever', move: 'FEVER TURNS PIPES TO BRICK', col: '#e43b44', icon: ['XXXX.XXX', 'XXXX.XXX', '........', 'XX.XXXX.', 'XX.XXXX.', '........', 'XXXX.XXX', 'XXXX.XXX'] };
 const hasPart = id => !FX().parts || FX().partlv || (run && run.tut) || !!(save.parts && save.parts[id]);
 const partLv = id => (run && run.tut) ? 3 : Math.min(3, +(save.parts && save.parts[id]) || 0);
 const PLV = { glide: { max: [0.6, 1.0, 1.5, 2.2], cap: [150, 110, 80, 60] }, dive: { v: [560, 680, 780, 880], bonus: [0, 1, 2, 3] }, dash: { dur: [0.16, 0.22, 0.28, 0.34], spd: [1.6, 1.9, 2.2, 2.6], cd: [2, 1.5, 1.1, 0.8] }, core: { gap: [600, 400, 300, 220] } };
-const PCOST = { glide: [120, 450, 1100], dive: [150, 500, 1200], dash: [200, 600, 1400], core: [250, 700, 1600] };
-const PDESC = { glide: ['SHORT GLIDE', 'LONGER GLIDE', 'FLOATY GLIDE', 'ENDLESS GLIDE'], dive: ['SLOW DIVE', 'FAST +1 STOMP', 'FASTER +2 STOMP', 'METEOR +3 STOMP'], dash: ['BREAKS BRICKS', 'SMASHES DRONES', 'LONG FAST DASH', 'UNSTOPPABLE'], core: ['BUBBLE / 600 M', 'BUBBLE / 400 M', 'BUBBLE / 300 M', 'BUBBLE / 220 M'] };
+const PCOST = { fever: [150, 500, 1200], glide: [120, 450, 1100], dive: [150, 500, 1200], dash: [200, 600, 1400], core: [250, 700, 1600] };
+const PDESC = { fever: ['5 S FEVER', '7 S FEVER', '9 S FEVER', '12 S FEVER'], glide: ['SHORT GLIDE', 'LONGER GLIDE', 'FLOATY GLIDE', 'ENDLESS GLIDE'], dive: ['SLOW DIVE', 'FAST +1 STOMP', 'FASTER +2', 'METEOR +3'], dash: ['BRICKS ONLY', 'SMASH DRONES', 'LONG DASH', 'UNSTOPPABLE'], core: ['1 PER 600 M', '1 PER 400 M', '1 PER 300 M', '1 PER 220 M'] };
 const glMax = () => FX().partlv ? PLV.glide.max[partLv('glide')] : 1.5;
 function partIcon(P, x, y, u = 3, dim = false) { for (let r = 0; r < 8; r++) for (let q = 0; q < 8; q++) if (P.icon[r][q] === 'X') { ctx.fillStyle = '#181425'; ctx.fillRect(x + q * u - 1, y + r * u - 1, u + 2, u + 2); } for (let r = 0; r < 8; r++) for (let q = 0; q < 8; q++) if (P.icon[r][q] === 'X') { ctx.fillStyle = dim ? '#3a4466' : P.col; ctx.fillRect(x + q * u, y + r * u, u, u); } if (!dim) { ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 2 * u, y + 2 * u, u, u); } }
 let shopAnim = null;                                       // the install animation on the counter
@@ -853,6 +856,13 @@ function tapEnd() { tapDown = false; }
 function tapMove(y, x) { if (!tapDown || swiped || tapDownY == null || !FX().taps || state !== 'play') return; const quick = performance.now() - tapDownAt < 320, dx = x == null || tapDownX == null ? 0 : x - tapDownX, dy = y - tapDownY;
   if (FX().fdash && quick && dx > 34 && dx > Math.abs(dy) && (run.dashCD || 0) <= 0) { swiped = true; dash(); return; }
   if (dy > 34 && quick && dy > Math.abs(dx)) { swiped = true; dive(); } }
+function smashPipe(p, sx, y) {                      // fever: the pipe is brick now, so Rivet bursts a hole straight through it
+  (p.holes = p.holes || []).push(y);
+  for (let q = 0; q < 16; q++) { const a = Math.random() * 6.28, sp = rng(180, 440); (run.debris = run.debris || []).push({ x: run.dist + sx + rng(0, p.w), y: y + rng(-44, 44), vx: Math.cos(a) * sp + rng(100, 280), vy: Math.sin(a) * sp - rng(120, 320), rot: rng(0, 6), vr: rng(-14, 14), l: rng(0.9, 1.6), tint: Math.random(), bounced: 0 }); }
+  shake = Math.max(shake, 7); noise(0.18, 0.12); tone(150, 50, 0.16, 'square', 0.07); boom(BX + 20, y, 10, 180, ['#e4a672', '#ead4aa', '#8b9bb4']);
+  if (FX().scrap) { run.exact += 2 * scrapMul(); const nn = Math.floor(run.exact) - run.scrap; run.scrap += nn; }
+  if (!run.brickFx || run.t - run.brickFx > 0.5) { float('SMASH!', BX + 30, y - 30, '#feae34'); run.brickFx = run.t; }
+}
 function giveBoost(id, sec, label) {
   run.boost = run.boost || {}; const fresh = !(run.boost[id] > 0); run.boost[id] = Math.max(run.boost[id] || 0, sec);
   if (fresh) { float(label, BX + 30, run.bird.y - 44, id === 'magnet' ? '#2ce8f5' : '#fee761'); SFX.milestone(); }
@@ -886,6 +896,7 @@ function addScrap(base, x, y) {
   run.scrap += n; if (n > 0) float('+' + n, x, y, '#ffd24a');
 }
 function addFever(n) {
+  if (FX().brickfever && run.feverT <= 0 && run.fever + n * Math.pow(1.4, cl('engine')) >= 100 && !run.fight) { setTimeout(() => { if (run && run.feverT > 0) { float('BRICK FEVER!', BX + 30, run.bird.y - 50, '#e43b44'); } }, 30); }
   if (!FX().fever || run.feverT > 0 || run.fight) return;
   run.fever = Math.min(100, run.fever + n * Math.pow(1.4, cl('engine')));
   if (run.fever >= 100) { run.feverT = feverLen(); run.fever = 100; shake = 10; float('FEVER!', BX + 40, run.bird.y - 40, '#ff4fd8'); SFX.fever(); flash = { c: '#ff4fd8', a: .35 }; }
@@ -1173,7 +1184,7 @@ function update(dt) {
           if (!save.seen.spring) { save.seen.spring = true; persist(); }
         }
         b.y = Math.min(b.y, spBot - 28 - r);
-      } else if (!inside) hurt('a pipe');
+      } else if (!inside) { const inHole = (p.holes || []).some(h => Math.abs(b.y - h) < 50 - r); if (inHole) {} else if (FX().brickfever && run.feverT > 0) smashPipe(p, sx, b.y); else hurt('a pipe'); }
       else { p.minEdge = Math.min(p.minEdge, edge); p.lastGi = gi2; }
     }
     if (!p.passed && sx + p.w < BX - r) {
@@ -1697,8 +1708,26 @@ function gapsOf(p) {
   if (p.kind === 'split') { const g1 = p.gap * 0.78, g2 = p.gap * 0.95, c1 = p.cy - 56 - g1 / 2, c2 = p.cy + 56 + g2 / 2; return [[c1 - g1 / 2, c1 + g1 / 2], [c2 - g2 / 2, c2 + g2 / 2]]; }
   return [[p.cy - p.gap / 2, p.cy + p.gap / 2]];
 }
+function brickBar(x, y0, y1, w, holes, capBottom) {
+  const h = y1 - y0; if (h <= 0) return; const X = Math.round(x / 4) * 4;
+  ctx.fillStyle = '#3e2731';
+  for (let yy = Math.floor(y0 / 12) * 12; yy < y1; yy += 12) {
+    const row = Math.round(yy / 12), off = row % 2 ? 10 : 0;
+    for (let xx = -off; xx < w; xx += 20) {
+      const bx = X + Math.max(0, xx), bw = Math.min(xx + 20, w) - Math.max(0, xx); if (bw <= 0) continue;
+      const cy = yy + 6; if (cy < y0 || cy > y1) continue; if (holes && holes.some(hy => Math.abs(cy - hy) < 50)) continue;
+      const tint = hsh(row * 13 + Math.round(xx / 20) + Math.round(x / 7));
+      ctx.fillStyle = '#3e2731'; ctx.fillRect(bx, yy, bw, 12); ctx.fillStyle = tint > 0.66 ? '#be4a2f' : tint > 0.33 ? '#a22633' : '#b86f50'; ctx.fillRect(bx + 2, yy + 2, Math.max(2, bw - 4), 8); ctx.fillStyle = '#e4a672'; ctx.fillRect(bx + 2, yy + 2, Math.max(2, bw - 4), 2);
+    }
+  }
+  const cy2 = capBottom ? y1 - 12 : y0; if (!(holes && holes.some(hy => Math.abs(cy2 + 6 - hy) < 50))) { ctx.fillStyle = '#3e2731'; ctx.fillRect(X - 4, cy2, w + 8, 12); ctx.fillStyle = '#733e39'; ctx.fillRect(X - 2, cy2 + 2, w + 4, 8); ctx.fillStyle = '#b86f50'; ctx.fillRect(X - 2, cy2 + 2, w + 4, 2); }
+}
 function drawPipeSet(x, p, Z, gaps, floorY, tt) {
   const w = p.w; let y0 = 0;
+  if (FX().brickfever && typeof run !== 'undefined' && run && (run.feverT > 0 || (p.holes && p.holes.length)) && state === 'play') {
+    gaps.forEach(([top, bot], i) => { if (i === 0) brickBar(x, 0, top, w, p.holes, true); else { const mid = (y0 + top) / 2; brickBar(x, y0, mid, w, p.holes, false); brickBar(x, mid, top, w, p.holes, true); } y0 = bot; });
+    brickBar(x, y0, floorY, w, p.holes, false); return;
+  }
   gaps.forEach(([top, bot], i) => {
     if (i === 0) pipeBar(x, 0, top, w, Z, true);
     else { const mid = (y0 + top) / 2; pipeBar(x, y0, mid, w, Z, false); pipeBar(x, mid, top, w, Z, true); }
@@ -2606,7 +2635,14 @@ function drawShop() {
   if (FX().parts) { const tab3 = (label, id, x) => btn(label, x, 240, 118, 34, () => { shopTab = id; }, { color: shopTab === id ? '#e0753a' : '#2a3350', size: 13 }); tab3('UPGRADES', 'up', 16); tab3('PARTS', 'parts', 141); tab3('LOOKS', 'look', 266); }
   else { const tab = (label, id, x) => btn(label, x, 240, 180, 34, () => { shopTab = id; }, { color: shopTab === id ? '#e0753a' : '#2a3350', size: 15 });
   tab('UPGRADES', 'up', 16); tab('LOOKS', 'look', 204); }
-  if (shopTab === 'parts' && FX().partlv) {
+  if (shopTab === 'parts' && FX().brickfever) {
+    [...PARTS, FEVER_PART].forEach((P, i) => { const y = 284 + i * 59, lv = partLv(P.id), maxed = lv >= 3, cost = maxed ? 0 : PCOST[P.id][lv], can = !maxed && save.scrap >= cost;
+      panel(16, y, W - 32, 54, { hi: lv ? P.col : '#5a6988' }); partIcon(P, 26, y + 15, 3, false);
+      text(P.name.toUpperCase(), 62, y + 14, 12, P.col, 'left');
+      for (let q = 0; q < 3; q++) { ctx.fillStyle = PXC.ink; ctx.fillRect(62 + tw(P.name.toUpperCase(), 12) + 8 + q * 14, y + 10, 10, 8); ctx.fillStyle = q < lv ? P.col : PXC.slate; ctx.fillRect(64 + tw(P.name.toUpperCase(), 12) + 8 + q * 14, y + 12, 6, 4); }
+      text(maxed ? PDESC[P.id][lv] + '  MAXED' : PDESC[P.id][lv] + ' > ' + PDESC[P.id][lv + 1], 62, y + 36, 11, maxed ? PXC.yellow : PXC.ice, 'left');
+      btn(maxed ? 'MAX' : '⚙ ' + fmt(cost), W - 112, y + 11, 86, 32, () => { if (maxed) return; if (can) { save.scrap -= cost; save.parts[P.id] = lv + 1; persist(); startInstall(P.name.toUpperCase() + ' LV ' + (lv + 1) + '!', P.col); shopSay(lv + 1 >= 3 ? 'UNSTOPPABLE, PAL!' : 'STRONGER ALREADY!'); shopMsg.good = true; } else shopSay('NEED MORE COINS!'); }, { color: maxed ? '#2a3350' : '#2f9e5e', disabled: !maxed && !can, size: 12 }); });
+  } else if (shopTab === 'parts' && FX().partlv) {
     PARTS.forEach((P, i) => { const x = 16 + (i % 2) * 188, y = 284 + Math.floor(i / 2) * 140, lv = partLv(P.id), maxed = lv >= 3, cost = maxed ? 0 : PCOST[P.id][lv], can = !maxed && save.scrap >= cost;
       panel(x, y, 180, 132, { hi: lv ? P.col : '#5a6988' }); partIcon(P, x + 10, y + 12, 4, false);
       text(P.name.toUpperCase(), x + 50, y + 18, 12, P.col, 'left');
