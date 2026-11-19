@@ -71,7 +71,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }, { brickfever: 1 }, { songs3: 1 }, { ads: 1 }, { banner: 1, noads: 1 }, { hd: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }, { brickfever: 1 }, { songs3: 1 }, { ads: 1 }, { banner: 1, noads: 1 }, { hd: 1 }, { bgplus: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -153,6 +153,8 @@ const VERS = [
     notes: ['A small banner under the game', 'It never covers the play area', 'Buy NO ADS once: banner and breaks gone', 'Rewarded ads stay optional', 'Restore purchase on a new phone'] },
   { v: '1.39', name: 'HD Pixels', sum: 'Twice the pixels, twice the detail.', visual: 'Finer pixels everywhere',
     notes: ['The pixel grid is twice as fine', 'Rivet re-rendered: feathers, seams, eye glint', 'The Void Cruiser gets hull panels and rivets', 'Finer pipes, coins, bricks, ground, skies', 'Hats and particles at the new resolution'] },
+  { v: '1.40', name: 'Living World', sum: 'Backgrounds that never stop moving.', visual: 'Traffic, trains, cranes, turbines',
+    notes: ['Junkyard: windmills and highway traffic', 'Smog Works: swinging cranes, conveyors, steam', 'Rust Pipes: a train on a viaduct, sparks, monorail', 'Storm: turbines and swaying power lines', 'Summit: floating islands, waterfalls, a searchlight'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -2253,6 +2255,60 @@ function drawArt3(z, d, t, hh, floorY, vw) {
   // far layer: hills / mountains with a lit ridge
   const far = (base, amp, sp, seed, col, rim, jag) => { const off = d * sp / G; for (let x = 0; x <= GX; x++) { const u = x + off; let h = amp * (0.55 + 0.45 * Math.sin(u * 0.045 + seed)) + amp * 0.3 * Math.sin(u * 0.13 + seed * 3); if (jag) h += amp * 0.5 * Math.abs(((u * 0.08 + seed) % 2) - 1) - amp * 0.25; h = Math.round(h); R(x, base - h, 1, fy - base + h + 1, col); R(x, base - h, 1, 1, rim); if (HQ > 1) { const ui = Math.floor(u); if (ui % 3 === 0) R(x + 0.25, base - h - 0.5, 0.5, 0.5, rim); if (hsh(ui * 7 + seed) < 0.25) R(x, base - h + 2 + Math.floor(hsh(ui) * 6), 0.5, 0.5, rim); } } };
   far(fy - 30, 18, 0.03, z * 1.7 + 0.4, A.far[0], A.far[1], z === 4 || z === 3);
+  // ---- 1.40: busier animated layers, drawn on the same grid with the zone's own colours ----
+  const bgFar = () => {
+    const offF = d * 0.035 / G, base = fy - 30;
+    if (z === 0 || z === 3) {                       // windmills / wind turbines turning on the far hills
+      for (let i = 0; i < 4; i++) { const x = wrap(i * 41 + 12 - offF, GX + 50) - 25, top = z === 3 ? fy - 64 - (i % 2) * 5 : base - 12 - (i % 2) * 4, hub = top, tc = z === 3 ? '#5a6988' : A.mid[0], bc = z === 3 ? '#8b9bb4' : A.mid[1]; R(x, top, 1, base - top + 8, tc); R(x - 0.5, top, 2, 1, bc);
+        const sp = z === 3 ? 3.2 + i * 0.4 : 1.1 + i * 0.2, L = z === 3 ? 8 : 6, nb = z === 3 ? 3 : 4;
+        for (let bl = 0; bl < nb; bl++) { const a = t * sp + bl * Math.PI * 2 / nb; for (let s = 1; s <= L * 2; s++) R(x + 0.25 + Math.cos(a) * s * 0.5, hub + Math.sin(a) * s * 0.5, 0.5, 0.5, s > L * 1.5 && z === 0 ? A.far[1] : bc); }
+        if (z === 3 && Math.floor(t * 1.5 + i) % 2) R(x, hub - 1, 1, 0.5, '#e43b44'); }
+    }
+    if (z === 1) {                                  // cranes with swinging hooks
+      for (let i = 0; i < 3; i++) { const x = wrap(i * 57 + 20 - offF * 1.4, GX + 70) - 35, top = base - 30; R(x, top, 1.5, base - top + 10, A.mid[0]); for (let y = top + 2; y < base + 8; y += 3) R(x - 0.5, y, 2.5, 0.5, A.mid[1]);
+        R(x - 8, top, 24, 1, A.mid[0]); R(x - 8, top + 1, 1, 2, A.mid[0]); const sw = Math.sin(t * 1.1 + i) * 3, hx = x + 10 + Math.sin(t * 0.4 + i) * 4; for (let s = 0; s < 12; s++) R(hx + sw * s / 12, top + 1 + s, 0.5, 1, A.mid[1]); R(hx + sw - 1, top + 13, 2.5, 2, A.far[0]);
+        if (Math.floor(t * 2 + i) % 2) R(x + 15.5, top - 0.5, 1, 0.5, '#e43b44'); }
+    }
+    if (z === 2) {                                  // a train crossing a far viaduct
+      const vy = fy - 60; R(-1, vy, GX + 2, 1, A.mid[0]); for (let ax = -((d * 0.05 / G) % 12); ax < GX; ax += 12) { R(ax, vy + 1, 1.5, fy - vy, A.far[0]); for (let q = 1; q < 5; q++) R(ax + 1.5 + q * 0.5, vy + 1 + (q < 3 ? 0 : 0.5), 0.5, 0.5, A.mid[0]); }
+      const tx = wrap(t * 26, GX + 160) - 80; for (let c = 0; c < 6; c++) { const cx = tx - c * 11; R(cx, vy - 4, 10, 3.5, A.near[0]); R(cx, vy - 4, 10, 0.5, A.far[1]); for (let w = 0; w < 4; w++) R(cx + 1 + w * 2.5, vy - 3, 1.5, 1, A.mid[2]); }
+      R(tx + 10, vy - 4, 2, 3.5, A.near[0]); R(tx + 11.5, vy - 3, 0.5, 1, '#fee761'); for (let q = 0; q < 4; q++) { const ph = (t * 3 + q * 0.25) % 1; R(tx + 4 - ph * 14, vy - 6 - ph * 6, 1.5 + ph * 2, 1.5 + ph * 2, A.far[1]); }
+    }
+    if (z === 4) {                                  // floating islands bobbing, with waterfalls
+      for (let i = 0; i < 3; i++) { const x = wrap(i * 53 + 18 - offF * 0.6, GX + 60) - 30, y = base - 34 - i * 7 + Math.sin(t * 0.8 + i * 2) * 2, w = 12 + i * 3;
+        for (let r = 0; r < 6; r++) R(x + r * 1.2, y + r, w - r * 2.4, 1, r === 0 ? A.far[1] : A.mid[0]); R(x + 1, y - 0.5, w - 2, 0.5, A.far[1]);
+        R(x + w * 0.3, y - 4, 1, 4, A.near[0]); R(x + w * 0.3 - 1.5, y - 6, 4, 2.5, A.mid[0]);
+        for (let s = 0; s < 14; s++) { const ph = (t * 6 + s * 0.6) % 14; R(x + w * 0.7 + (s % 2) * 0.5, y + 4 + ph, 0.5, 1, s % 3 ? '#2ce8f5' : '#c0cbdc'); } }
+    }
+  };
+  const bgMid = () => {
+    if (z === 0) {                                  // an elevated highway with traffic both ways
+      const ry = fy - 13, so = (d * 0.12 / G) % 8; R(-1, ry, GX + 2, 1.5, A.near[0]); R(-1, ry - 0.5, GX + 2, 0.5, A.mid[1]); for (let px = -so; px < GX; px += 8) R(px, ry + 1.5, 1, fy - ry, A.near[0]);
+      const cols = ['#e43b44', '#0099db', '#feae34', '#63c74d', '#c0cbdc'];
+      for (let c = 0; c < 9; c++) { const dir = c % 2 ? 1 : -1, sp = 14 + (c % 3) * 5, x = wrap(hsh(c * 7) * 300 + dir * t * sp - d * 0.12 / G, GX + 20) - 10, yy = ry - (dir > 0 ? 2 : 1.5);
+        R(x, yy, 3.5, 1.5, cols[c % 5]); R(x + 0.5, yy - 0.5, 2, 0.5, cols[c % 5]); R(x + 1, yy - 0.5, 1, 0.5, '#c0cbdc'); R(dir > 0 ? x + 3.5 : x - 0.5, yy + 0.5, 0.5, 0.5, '#fee761'); R(dir > 0 ? x - 0.5 : x + 3.5, yy + 0.5, 0.5, 0.5, '#e43b44'); }
+    }
+    if (z === 1) {                                  // a conveyor carrying crates, and steam vents
+      const cy = fy - 10, so = (t * 14) % 3; R(-1, cy, GX + 2, 1.5, A.near[0]); for (let x = -so; x < GX; x += 3) R(x, cy + 0.5, 1, 0.5, A.mid[1]);
+      for (let c = 0; c < 8; c++) { const x = wrap(c * 19 + t * 14 - d * 0.1 / G, GX + 20) - 10; R(x, cy - 3, 3, 3, A.mid[0]); R(x, cy - 3, 3, 0.5, A.far[1]); R(x + 1, cy - 2, 1, 1, A.near[0]); }
+      for (let v = 0; v < 3; v++) { const vx = wrap(v * 47 + 30 - d * 0.1 / G, GX + 40) - 20, ph = (t * 0.7 + v * 0.37) % 1; if (ph < 0.45) for (let q = 0; q < 6; q++) { const k = (ph / 0.45 + q / 6) % 1; R(vx + Math.sin(q * 2 + t * 3) * k * 2, cy - 2 - k * 14, 1 + k * 2, 1 + k * 2, k < 0.5 ? '#c0cbdc' : A.far[1]); } }
+    }
+    if (z === 2) {                                  // a monorail pod gliding past and foundry sparks
+      const my = fy - 16; R(-1, my, GX + 2, 1, A.near[0]); const px = wrap(t * 30 - d * 0.1 / G, GX + 40) - 20; R(px, my + 1, 8, 3, A.mid[0]); R(px, my + 1, 8, 0.5, A.far[1]); for (let w = 0; w < 3; w++) R(px + 1 + w * 2.3, my + 2, 1.5, 1, A.mid[2]);
+      for (let f = 0; f < 3; f++) { const fx = wrap(f * 61 + 20 - d * 0.08 / G, GX + 40) - 20; for (let q = 0; q < 10; q++) { const k = (t * 1.6 + q / 10 + f * 0.3) % 1, a = -1.57 + (hsh(q * 7 + f) - 0.5) * 1.4; R(fx + Math.cos(a) * k * 10, fy - 14 + Math.sin(a) * k * 12 + k * k * 10, 0.5, 0.5, k < 0.4 ? '#fee761' : '#f77622'); } }
+    }
+    if (z === 3) {                                  // power lines that sway, with a spark running along them
+      const so = (d * 0.12 / G) % 26; for (let px = -so - 26; px < GX + 26; px += 26) { R(px, fy - 22, 1, 22, A.near[0]); R(px - 2, fy - 22, 5, 0.5, A.near[0]);
+        for (let s = 0; s <= 26; s += 0.5) { const sag = Math.sin(s / 26 * Math.PI) * (3 + Math.sin(t * 2) * 0.6); R(px + s, fy - 21.5 + sag, 0.5, 0.5, A.mid[1]); }
+        const k = (t * 0.8 + px * 0.01) % 1, sx = px + k * 26; R(sx, fy - 21.5 + Math.sin(k * Math.PI) * 3, 0.5, 0.5, '#2ce8f5'); }
+    }
+    if (z === 4) {                                  // a summit tower sweeping a searchlight, and twinkling lights
+      const tx = wrap(GX * 0.7 - d * 0.05 / G, GX + 60) - 30; R(tx, fy - 40, 2, 40, A.near[0]); R(tx - 1, fy - 42, 4, 2, A.mid[0]); if (Math.floor(t * 2) % 2) R(tx + 0.5, fy - 43, 1, 1, '#e43b44');
+      ctx.save(); ctx.globalAlpha = 0.12; ctx.fillStyle = '#c0cbdc'; const a = -1.57 + Math.sin(t * 0.5) * 0.8, ox = (tx + 1) * G, oy = (fy - 41) * G; ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + Math.cos(a - 0.08) * 900, oy + Math.sin(a - 0.08) * 900); ctx.lineTo(ox + Math.cos(a + 0.08) * 900, oy + Math.sin(a + 0.08) * 900); ctx.fill(); ctx.restore();
+      for (let q = 0; q < 30; q++) { const x = hsh(q * 9 + 2) * GX, y = fy - 6 - hsh(q * 5) * 10; if ((t * 0.7 + hsh(q) * 5) % 3 < 2) R(x, y, 0.5, 0.5, q % 3 ? A.mid[2] : '#fee761'); }
+    }
+  };
+  if (FX().bgplus) bgFar();
   // mid layer: the zone's skyline, windows that slowly blink
   const off = d * 0.08 / G, slot = 15, i0 = Math.floor(off / slot), sx0 = -(off % slot);
   for (let k = -1; k <= Math.ceil(GX / slot) + 1; k++) {
@@ -2267,6 +2323,7 @@ function drawArt3(z, d, t, hh, floorY, vw) {
       for (let wy = top + 3; wy < fy - 2; wy += 3) for (let wx = x0 + 2; wx < x0 + w - 1; wx += 3) { const hr = hsh(wx * 13 + wy * 7 + i); if (hr < 0.28 || (hr < 0.33 && Math.floor(t * 0.5 + hr * 40) % 2)) { R(wx, wy, 1, 1, lit); if (HQ > 1) { R(wx, wy, 0.5, 0.5, '#ffffff'); R(wx, wy + 1, 1, 0.5, A.near[0]); } } else if (HQ > 1) { R(wx, wy, 1, 1, A.near[0]); R(wx + 0.5, wy, 0.5, 0.5, rim); } }
     }
   }
+  if (FX().bgplus) bgMid();
   // near layer: dark foreground silhouettes with a rim of light
   const offN = d * 0.2 / G, slotN = 22, j0 = Math.floor(offN / slotN), nx0 = -(offN % slotN);
   for (let k = -1; k <= Math.ceil(GX / slotN) + 1; k++) {
