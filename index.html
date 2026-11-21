@@ -79,7 +79,7 @@ const GUARDS = [
 const zoneOf = m => { if (!FX().zones) return 0; const i = ZONES.findIndex(z => m < z.to); return i < 0 ? ZONES.length - 1 : i; };
 
 // ---------- Versions: every update changes how the game looks ----------
-const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }, { brickfever: 1 }, { songs3: 1 }, { ads: 1 }, { banner: 1, noads: 1 }, { hd: 1 }, { bgplus: 1 }, { perf: 1, boss2: 1, saga: 1 }];
+const ADD = [{}, { junk: 1, scrap: 1, workshop: 1 }, { drones: 1, pads: 1, cards: 1, fever: 1 }, { zones: 1 }, { guardians: 1 }, { sprite: 1, music: 1, pixel: 1 }, { flow: 1 }, { health: 1 }, { polish: 1 }, { scenery: 1 }, { pipes: 1 }, { zoom: 1 }, { emote: 1 }, { feel: 1 }, { wide: 1 }, { luck: 1 }, { clean: 1 }, { shop: 1, coins2: 1, songs2: 1 }, { ramp: 1, launch: 1 }, { ui2: 1, sky2: 1, mood: 1 }, { art3: 1, ship: 1 }, { tut: 1, tidy: 1 }, { taps: 1 }, { bossfx: 1 }, { spots: 1 }, { fdash: 1 }, { boosts: 1 }, { bricks: 1 }, { helper: 1 }, { cpts: 1 }, { flipsafe: 1 }, { smooth: 1 }, { nobolt: 1 }, { parts: 1, story: 1 }, { partlv: 1, story2: 1 }, { brickfever: 1 }, { songs3: 1 }, { ads: 1 }, { banner: 1, noads: 1 }, { hd: 1 }, { bgplus: 1 }, { perf: 1, boss2: 1, saga: 1 }, { secret: 1 }];
 const VERS = [
   { v: '1.0', name: 'Classic', sum: 'The original one-tap game.', visual: 'Green pipes, yellow bird',
     notes: ['Tap to flap through the pipes', 'Score is pipes passed', 'No upgrades, no extras: pure Flappy'] },
@@ -165,6 +165,8 @@ const VERS = [
     notes: ['Junkyard: windmills and highway traffic', 'Smog Works: swinging cranes, conveyors, steam', 'Rust Pipes: a train on a viaduct, sparks, monorail', 'Storm: turbines and swaying power lines', 'Summit: floating islands, waterfalls, a searchlight'] },
   { v: '1.41', name: 'The Saga', sum: 'Smooth as butter. Real boss battles. A whole story.', visual: 'Boss attacks, cutscenes, story',
     notes: ['Much faster drawing: smooth on phones', 'Every boss has its own attacks and phases', 'The world reacts: alarms, shaking, red skies', 'Boss intro and outro cutscenes', 'A full story, radio calls and a true ending'] },
+  { v: '1.42', name: 'Settings', sum: 'A settings menu. And maybe a secret or two...', visual: 'Gear button on the title',
+    notes: ['Gear button on the title screen', 'Sound and screen shake toggles', 'Rivet looks a little ticklish', 'Some say he hides something', 'Try it and see'] },
 ].map((o, i) => ({ ...o, f: Object.assign({}, ...ADD.slice(0, i + 1)) }));
 const LATEST = VERS.length;
 let ver = LATEST;
@@ -1114,7 +1116,7 @@ function hurt(why) {
     return;
   }
   if (FX().health && run.hp > 1) {                           // a hit costs a heart, not the run
-    run.hp--; if (run.hp === 1 && FX().saga) radio('lowhp'); run.invuln = 1.6; shake = 9; run.freeze = 0.1; run.bird.vy = -260; SFX.hurt(); flash = { c: '#e43b44', a: .4 };
+    run.hp--; rumble(180, 0.7); if (run.hp === 1 && FX().saga) radio('lowhp'); run.invuln = 1.6; shake = 9; run.freeze = 0.1; run.bird.vy = -260; SFX.hurt(); flash = { c: '#e43b44', a: .4 };
     float('-1 HEART', BX + 30, run.bird.y - 28, '#ff7a8a');
     for (let i = 0; i < 14; i++) parts.push({ x: BX, y: run.bird.y, vx: rng(-200, 200), vy: rng(-220, 120), l: rng(.3, .8), c: ['#e43b44', '#f6757a', '#fff'][i % 3] });
     return;
@@ -3170,6 +3172,7 @@ function drawTitle() {
   dimDither(1);
   if (resetAsk) { drawResetAsk(); return; }
   if (noAdsOpen) { drawNoAds(); return; }
+  if (FX().secret && setOpen) { drawSettings(); return; }
   if (FX().noads && Ads.kind !== 'none') btn(Store.owned ? 'AD FREE' : 'NO ADS', 8, 16, 80, 28, () => { noAdsOpen = true; }, { color: Store.owned ? '#2a3350' : '#e0753a', size: 11 });
   if (FX().feel && rivetOk) { ctx.save(); ctx.translate(W / 2, (FX().boosts ? 268 : 264) + Math.round(Math.sin(t * 2.4) * 2) * 3); ctx.scale(FX().boosts ? 1.25 : 1.5, FX().boosts ? 1.25 : 1.5); drawRivetSprite(0, 0, Math.floor(t * 12) % 8, 0, false, false, 1); ctx.restore(); }
   pixTextDraw('FLAPOCALYPSE', W / 2, 150, 40, PXC.yellow, 'center', PXC.ink);
@@ -3184,6 +3187,7 @@ function drawTitle() {
   if (FX().workshop) btn(FX().shop ? 'SHOP' : 'WORKSHOP', 60, 384, 280, 48, () => { state = 'menu'; }, { color: '#3c6df0', size: 18 });
   btn('UPDATES', 60, FX().workshop ? 448 : 384, 280, 48, () => { pv = ver; cmp = 0.5; state = 'updates'; }, { color: '#7a4fe0', size: 18 });
   muteBtn(W - 36, 34);
+  if (FX().secret) { btn('', W - 100, 16, 40, 36, () => { setOpen = true; secretTaps = 0; }, { color: 'grey', size: 12 }); gearIcon(W - 80, 34, PXC.white); }
   panel(20, H - 44, W - 40, 28, { fill: PXC.navy });
   text(FX().launch ? (save.best ? `BEST ${fmt(save.best)} M   ⚙ ${fmt(save.scrap)}   ${save.summits ? 'SUMMITS ' + save.summits : 'REACH 3,000 M!'}` : 'ONE TAP. ONE MAP. REACH THE SUMMIT!') : `${LATEST} UPDATES SO FAR. SEE WHAT CHANGED IN EACH.`, W / 2, H - 30, 11, PXC.ice);
 }
@@ -3269,6 +3273,7 @@ function render() {
     if (paused) { if (!FX().ui2) panel(50, H / 2 - 70, W - 100, 140); pixTextDraw('PAUSED', W / 2, H / 2 - 22, 40, PXC.white, 'center', PXC.ink); text('TAP TO RESUME', W / 2, H / 2 + 36, 16, PXC.yellow); }
     else text(String(Math.max(1, Math.ceil(resumeT / 0.55))), W / 2, H / 2, 80, PXC.yellow);
   }
+  if (pixText) { try { drawPadHud(); } catch (e) {} }
   if (fadeA > 0.03) dimDither(Math.min(4, Math.ceil(fadeA * 4.5)));   // dissolve through the checker dither
   if (adMock) drawAdMock();
 }
@@ -3278,12 +3283,76 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
 addEventListener('blur', pauseNow);
 
 // ---------- Loop & input (one button: tap anywhere / space) ----------
+// ---------- 1.42: settings, with a secret: keyboard and controller support ----------
+let OPTS = { shake: true, secret: false, kb: false, pad: false };
+try { Object.assign(OPTS, JSON.parse(localStorage.getItem('fl.opts') || '{}')); } catch (e) {}
+const saveOpts = () => { try { localStorage.setItem('fl.opts', JSON.stringify(OPTS)); } catch (e) {} };
+let setOpen = false, secretTaps = 0, secretFx = 0, padName = '', padPrev = {}, padToast = 0;
+function gearIcon(x, y, c) { ctx.fillStyle = c; ctx.fillRect(x - 8, y - 8, 16, 16); for (const [dx, dy] of [[-2, -12], [-2, 8], [-12, -2], [8, -2]]) ctx.fillRect(x + dx, y + dy, 4, 4); for (const [dx, dy] of [[-10, -10], [6, -10], [-10, 6], [6, 6]]) ctx.fillRect(x + dx, y + dy, 4, 4); ctx.fillStyle = '#2a3350'; ctx.fillRect(x - 3, y - 3, 6, 6); }
+function drawSettings() {
+  const t = performance.now() / 1000, x0 = 30, w = W - 60, y0 = OPTS.secret ? 110 : 150, h = OPTS.secret ? 430 : 330;
+  dimDither(3); panel(x0, y0, w, h);
+  pixTextDraw('SETTINGS', W / 2, y0 + 34, 26, PXC.yellow, 'center', PXC.ink);
+  const row = (label, on, y, fn) => { text(label, x0 + 22, y + 14, 12, PXC.white, 'left'); btn(on ? 'ON' : 'OFF', x0 + w - 92, y, 72, 28, fn, { color: on ? '#3e8948' : '#2a3350', size: 12 }); };
+  row('SOUND', !muted, y0 + 64, () => { muted = !muted; try { localStorage.setItem('fl.mute', muted ? '1' : '0'); } catch (e) {} });
+  row('SCREEN SHAKE', OPTS.shake, y0 + 100, () => { OPTS.shake = !OPTS.shake; saveOpts(); });
+  // the secret: tap Rivet five times
+  const ry = y0 + 170, hop = secretFx > 0 ? Math.sin((1 - secretFx) * Math.PI * 4) * 10 : 0;
+  ctx.save(); ctx.translate(W / 2, ry - Math.abs(hop)); ctx.scale(1.2, 1.2); drawRivetSprite(0, 0, Math.floor(t * 10) % 8, 0, false, false, 1); ctx.restore();
+  buttons.push({ x: W / 2 - 34, y: ry - 30, w: 68, h: 60, onClick: () => { if (OPTS.secret) { secretFx = 1; tone(880, 1320, 0.08, 'square', 0.04); return; } secretTaps++; secretFx = 1; tone(500 + secretTaps * 140, 700 + secretTaps * 140, 0.08, 'square', 0.05); if (secretTaps >= 5) { OPTS.secret = true; saveOpts(); flash = { c: '#fee761', a: .6 }; [0, 1, 2, 3, 4].forEach(i => tone(660 * Math.pow(1.26, i), 660 * Math.pow(1.26, i), 0.1, 'square', 0.06, i * 0.08)); } } });
+  text(`FLAPOCALYPSE V${VERS[ver - 1].v}`, W / 2, ry + 40, 11, PXC.mist);
+  if (!OPTS.secret && secretTaps > 0) text('.'.repeat(secretTaps), W / 2, ry + 56, 14, PXC.yellow);
+  if (OPTS.secret) {
+    const sy = ry + 66; ctx.fillStyle = PXC.ink; ctx.fillRect(x0 + 16, sy - 8, w - 32, 2);
+    pixTextDraw('SECRET CONTROLS', W / 2, sy + 10, 14, Math.floor(t * 4) % 2 ? PXC.yellow : PXC.orange, 'center', PXC.ink);
+    row('KEYBOARD', OPTS.kb, sy + 28, () => { OPTS.kb = !OPTS.kb; saveOpts(); });
+    row('CONTROLLER', OPTS.pad, sy + 64, () => { OPTS.pad = !OPTS.pad; saveOpts(); });
+    text(OPTS.pad ? (padName ? 'READY: ' + padName : 'PLUG IN A PAD AND PRESS A BUTTON') : OPTS.kb ? 'SPACE FLAP  DOWN DIVE  RIGHT DASH' : 'YOU FOUND IT. NICE.', W / 2, sy + 108, 11, PXC.ice);
+  }
+  btn('CLOSE', W / 2 - 70, y0 + h - 44, 140, 32, () => { setOpen = false; }, { color: '#7a4fe0', size: 13 });
+}
+// a controller is read every frame and turned into the same keys the keyboard uses
+const sendKey = (type, code) => dispatchEvent(new KeyboardEvent(type, { code, key: code === 'Enter' ? 'Enter' : '' }));
+function padTick(dt) {
+  secretFx = Math.max(0, secretFx - dt * 2); padToast = Math.max(0, padToast - dt);
+  if (!FX().secret || !OPTS.secret || !OPTS.pad || !navigator.getGamepads) return;
+  let gp = null; try { gp = [...navigator.getGamepads()].find(g => g && g.connected); } catch (e) {}
+  if (!gp) { padName = ''; return; }
+  if (!padName) { padName = (gp.id || 'PAD').replace(/\(.*?\)/g, '').trim().toUpperCase().slice(0, 12) || 'PAD'; padToast = 2.5; }
+  const B = i => !!(gp.buttons[i] && gp.buttons[i].pressed), ay = gp.axes[1] || 0, ax = gp.axes[0] || 0;
+  const now = { a: B(0), dash: B(1) || B(2) || B(5) || B(7) || ax > 0.7 || B(15), dive: B(13) || ay > 0.7 || B(3), start: B(9), back: B(8) };
+  const edge = k => now[k] && !padPrev[k], up = k => !now[k] && padPrev[k];
+  if (edge('a')) sendKey('keydown', state === 'title' || state === 'dead' || state === 'victory' ? 'Enter' : 'Space'); if (up('a')) sendKey('keyup', 'Space');
+  if (edge('dash')) sendKey('keydown', 'ArrowRight'); if (edge('dive')) sendKey('keydown', 'ArrowDown');
+  if (edge('start')) sendKey('keydown', state === 'play' ? 'Escape' : 'Enter'); if (edge('back')) sendKey('keydown', 'Escape');
+  padPrev = now;
+}
+function rumble(ms, k) { if (!OPTS.secret || !OPTS.pad || !navigator.getGamepads) return; try { const gp = [...navigator.getGamepads()].find(g => g && g.connected); const v = gp && gp.vibrationActuator; if (v && v.playEffect) v.playEffect('dual-rumble', { duration: ms, strongMagnitude: k, weakMagnitude: k }); } catch (e) {} }
+// extra keys for menus once the secret keyboard is on (and always for a controller)
+function secretKey(e) {
+  if (!FX().secret || !(OPTS.secret && (OPTS.kb || (!e.isTrusted && OPTS.pad)))) return false;
+  const k = e.code;
+  if (setOpen) { if (k === 'Escape' || k === 'Enter') { setOpen = false; return true; } return false; }
+  if (k === 'Escape' && (state === 'menu' || state === 'dead' || state === 'victory')) { state = 'title'; return true; }
+  if (k === 'Escape' && state === 'story') { endStory(); return true; }
+  if (k === 'Enter' && (state === 'dead' || state === 'victory') && performance.now() - deadAt > 500) { FX().cpts && save.cp > 0 && !dailyMode && state === 'dead' ? startRun(false, save.cp) : startRun(dailyMode); return true; }
+  if (k === 'Enter' && state === 'title' && !resetAsk && !noAdsOpen) { FX().cpts && save.cp > 0 ? startRun(false, save.cp) : startRun(false); return true; }
+  if (state === 'title' && e.isTrusted) { if (k === 'KeyB') { state = 'menu'; return true; } if (k === 'KeyU') { pv = ver; cmp = 0.5; state = 'updates'; return true; } if (k === 'KeyO') { setOpen = true; return true; } }
+  return false;
+}
+function drawPadHud() {
+  if (!FX().secret || !OPTS.secret) return;
+  if (padToast > 0 && padName) { ctx.save(); ctx.globalAlpha = Math.min(1, padToast * 2); panel(W / 2 - 120, H - 92, 240, 30); text('CONTROLLER: ' + padName, W / 2, H - 77, 11, PXC.green); ctx.restore(); }
+  if (state === 'play' && run && run.t < 4 && (OPTS.kb || (OPTS.pad && padName))) text(OPTS.pad && padName ? 'A FLAP  B DASH  DOWN DIVE' : 'SPACE FLAP  RIGHT DASH  DOWN DIVE', W / 2, H - 60, 11, PXC.ice);
+}
 function frame(ts) {
   const dt = Math.min(0.033, (ts - last) / 1000 || 0); last = ts;
   if (fadeA > 0) fadeA = Math.max(0, fadeA - dt * 3.2);
   if (resumeT > 0 && !paused) { const was = Math.ceil(resumeT / 0.55); resumeT -= dt; if (Math.ceil(Math.max(0, resumeT) / 0.55) !== was) SFX.tick(); }
   else if (!paused && !adMock && !Ads.busy) update(dt);
   try { musicTick(); } catch (e) {}
+  try { padTick(dt); } catch (e) {}
+  if (FX().secret && !OPTS.shake) shake = 0;
   render(); requestAnimationFrame(frame);
 }
 function toLogical(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; }
@@ -3306,6 +3375,7 @@ addEventListener('pointercancel', () => { tapEnd(); });
 addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') tapEnd(); });
 addEventListener('keydown', e => {
   const k = e.code; ac();
+  if (secretKey(e)) { e.preventDefault(); return; }
   if (k === 'KeyP' || k === 'Escape') { if (state === 'play') { if (paused) resumeNow(); else pauseNow(); return; } }
   if (paused) { if (k === 'Space' || k === 'ArrowUp') { e.preventDefault(); resumeNow(); } return; }
   if (k === 'KeyM') { muted = !muted; try { localStorage.setItem('fl.mute', muted ? '1' : '0'); } catch (e2) {} return; }
